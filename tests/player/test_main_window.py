@@ -1,10 +1,9 @@
-"""Дымовой тест окна Player (pytest-qt)."""
-from __future__ import annotations
+from pytestqt.qtbot import QtBot
 
 from educase_player.ui.main_window import MainWindow
 
 
-def test_player_window_title(qtbot) -> None:
+def test_player_window_title(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     assert window.windowTitle() == "EduCase Player"
