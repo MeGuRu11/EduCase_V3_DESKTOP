@@ -1,0 +1,111 @@
+# CLAUDE.md — EduCase
+
+> Этот файл читается Claude Code в начале каждой сессии. Держим его коротким и
+> императивным. Подробности — в `.claude/skills/*/SKILL.md`.
+
+## Что это за проект
+
+**EduCase** — десктоп-тренажёр для подготовки военных эпидемиологов (ВМА им. Кирова),
+Windows 10/11, компьютерный класс. **Две раздельные программы:**
+
+- **Constructor** — для преподавателя. Без авторизации, работает как инструмент.
+- **Player** — для курсанта. Проходит кейс, формирует результат.
+
+**Обмен только файлами:** архивы `.educase` (кейс) и `.eduresult` (результат), перенос
+вручную через Проводник. **Сети нет нигде** (см. жёсткие правила).
+
+**Дедлайн:** 25 июня 2026. Принцип №1 — **скорость до работающего кода**. Без раздувания
+документации и артефактов, которые придётся переделывать (два прошлых захода провалились
+именно из-за over-documentation и scope creep).
+
+## Архитектура (Clean Architecture, общий core + два приложения)
+
+```
+src/
+  educase_core/          # общий слой: домен, сервисы, инфраструктура, кодеки архивов
+    domain/              # сущности, value objects — НИКАКИХ зависимостей
+    application/         # use cases, сервисы — оркестрация, без бизнес-правил
+    infrastructure/      # SQLAlchemy, файловый I/O
+      db/
+      archive/           # кодеки .educase / .eduresult
+  educase_constructor/   # GUI преподавателя (PySide6)
+  educase_player/        # GUI курсанта (PySide6)
+```
+
+### Запрещённые зависимости (нарушение = архитектурная ошибка)
+- `domain` ← PySide6 / SQLAlchemy (домен ничего не знает о GUI и ORM)
+- `*_constructor` / `*_player` (UI) ← `infrastructure` напрямую (только через `application`)
+- любой код ← сеть (см. ниже)
+
+## Лестница агентов (cheapest capable model)
+
+Роли вынесены в сабагентов `.claude/agents/` — поле `model:` задаёт уровень лестницы.
+
+| Сабагент            | model  | Когда                                            |
+|---------------------|--------|--------------------------------------------------|
+| `architect`         | opus   | Решения по архитектуре, ADR, ревью дизайна       |
+| `senior-developer`  | opus   | Критичный/сложный код (домен, кодеки, движок кейса) |
+| `ui-builder`        | sonnet | PySide6-виджеты, некритичный UI, рендереры этапов |
+| `code-reviewer`     | sonnet | Ревью PR по quality gate                         |
+| `reality-checker`   | sonnet | Ручная регрессия, визуальные пруфы                |
+
+**Codex GPT 5.5** — отдельный инструмент для скаффолдинга, не сабагент Claude.
+Его правила — в `CODEX.md`.
+
+## Обязательный quality gate — после КАЖДОГО изменения кода
+
+```bash
+ruff check src tests        # 1. линтер — до зелёного
+mypy src tests              # 2. типы (strict) — до зелёного
+pytest -q                   # 3. тесты — до зелёного
+python -m compileall -q src tests   # 4. компиляция
+# 5. коммит (Conventional Commits): feat: / fix: / refactor: / test: / docs: / chore:
+```
+Не переходи к следующему шагу, пока текущий не зелёный.
+
+## Стандарты кода (кратко)
+
+**PySide6:** только виджеты (без QML); layout-менеджеры (никакого абсолютного
+позиционирования); стили в QSS (никакого inline-стиля в Python); долгие операции — в
+QThread/QRunnable, никогда в основном потоке; данные из БД — QTableView + QAbstractTableModel.
+
+**SQLAlchemy 2:** `Mapped[]`-аннотации (не `Column()`); `DeclarativeBase`;
+`relationship(back_populates=...)`; Session через DI (не глобальные переменные);
+параметризованные запросы (никаких f-string в SQL).
+
+**Python:** типы на всё (mypy strict); docstrings на публичные API; `logging`/loguru
+вместо `print()`; никаких хардкод-путей — только через `config.py`/ENV;
+`# type: ignore` только с комментарием-причиной.
+
+**Тесты (pytest / pytest-qt):** SQLite `:memory:` для БД (без моков ORM); реальные
+виджеты вместо моков PySide6 где возможно; фикстуры в `conftest.py`; имена
+`test_<что>_<сценарий>`.
+
+## Жёсткие правила проекта (НЕ нарушать без нового ADR)
+
+1. **Сети нет (ADR-003).** Никаких `requests`/`httpx`/`socket`/HTTP-серверов/клиентов.
+   Обмен — только файлы `.educase`/`.eduresult` вручную через Проводник.
+2. **JSON не показывается пользователю.** Это внутренний формат внутри ZIP-архива.
+3. **Шесть фиксированных этапов** кейса (никакого редактора графа узлов). Подробности —
+   `.claude/skills/educase-stage-mechanics`.
+4. **Неверные ответы не блокируют прохождение.** Ошибка вскрывается только в финальном
+   отчёте (ветвление «Вариант B»: оба пути проходят одни и те же этапы).
+5. **Поиск по ключевым словам — строгий:** синонимы задаёт преподаватель, никакого
+   fuzzy-матчинга и устойчивости к опечаткам.
+
+## Где что лежит
+
+- Контекст и правила → `.claude/skills/educase-project`
+- Механика этапов/поиска/документов/осмотра → `.claude/skills/educase-stage-mechanics`
+- Шаблоны документов (DM4, прил. 22/23, акт расследования) → `.claude/skills/educase-document-templates`
+- Формат `.educase`/`.eduresult` → `.claude/skills/educase-archive-format`
+- ADR → `docs/adr/`
+
+## Старт окружения
+
+```bash
+python -m venv .venv && . .venv/Scripts/activate   # Windows
+pip install -e ".[dev]"
+educase-constructor   # или: python -m educase_constructor
+educase-player        # или: python -m educase_player
+```

@@ -1,0 +1,57 @@
+# EduCase
+
+Десктоп-тренажёр для подготовки военных эпидемиологов (ВМА им. Кирова). Windows 10/11,
+компьютерный класс. Две раздельные программы:
+
+- **Constructor** — преподаватель собирает кейсы (без авторизации).
+- **Player** — курсант проходит кейс и формирует результат.
+
+Обмен — только файлами `.educase` (кейс) и `.eduresult` (результат), перенос вручную.
+**Сетевого кода в проекте нет** (ADR-003).
+
+## Стек
+
+Python 3.12 · PySide6 (только виджеты) · SQLAlchemy 2 + SQLite · loguru · PyInstaller ·
+pytest-qt · ruff · mypy (strict).
+
+## Разработка
+
+```bash
+python -m venv .venv && . .venv/Scripts/activate    # Windows
+pip install -e ".[dev]"
+
+# Запуск
+educase-constructor      # или: python -m educase_constructor
+educase-player           # или: python -m educase_player
+
+# Quality gate
+ruff check src tests
+mypy src tests
+pytest -q
+```
+
+## Сборка EXE
+
+```bash
+pyinstaller packaging/constructor.spec
+pyinstaller packaging/player.spec
+# результат — в dist/
+```
+
+## Для ИИ-агентов
+
+- `CLAUDE.md` — инструкция для Claude Code (архитектор/senior/UI/ревью).
+- `CODEX.md` — правила для Codex GPT 5.5 (скаффолдинг).
+- `.claude/agents/` — сабагенты с привязкой к лестнице моделей (`model:`).
+- `.claude/skills/` — проектные скиллы (контекст, механика этапов, документы, формат архива).
+
+## Структура
+
+```
+src/educase_core/          общий слой (домен, application, infrastructure, кодеки архивов)
+src/educase_constructor/   GUI преподавателя
+src/educase_player/        GUI курсанта
+tests/                     pytest / pytest-qt
+packaging/                 .spec для PyInstaller
+docs/adr/                  архитектурные решения (ADR-001..008)
+```

@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# --- Virtualenv ---
+.venv/
+venv/
+.env
+
+# --- Кэши инструментов ---
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# --- Сборка (PyInstaller) ---
+build/
+dist/
+
+# --- Локальные БД (никогда не коммитим) ---
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Тестовые артефакты обмена ---
+*.educase
+*.eduresult
+
+# --- IDE ---
+.idea/
+.vscode/
+*.iml
