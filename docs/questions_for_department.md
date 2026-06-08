@@ -20,10 +20,9 @@
 - [ ] Реальная схема `Case`/`Stage`/`Document` и вспомогательных сущностей (заменить скелет в
       DATA_MODEL.md).
 - [ ] Поля **PatientCard**, **DocumentField**, **ObservationTimeline**.
-- [ ] Структура **facility_scheme**, **action_icons**, **hotspots** осмотра помещений.
-- [ ] Точная схема `manifest.json` внутри `.educase`/`.eduresult`: версия формата, id кейса,
-      контрольная сумма, метаданные; раскладка ассетов и ссылки на них.
-- [ ] Валидация при импорте: поведение при несовместимой версии / повреждённом архиве.
+- [x] ~~Структура facility_scheme / action_icons / hotspots~~ — SchemeDocument (ADR-012).
+- [x] ~~Схема manifest.json + раскладка ассетов~~ — задана в docs/specs/FEATURE-01-archive-codecs.md.
+- [x] ~~Валидация при импорте (версия / повреждённый архив)~~ — задана в FEATURE-01.
 
 ## 3. Архитектурные развилки 🛠
 

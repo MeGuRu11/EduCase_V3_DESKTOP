@@ -38,10 +38,19 @@
   ошибка фиксируется, но не блокирует (ADR-005), вскрывается в отчёте.
 - **FacilityScheme** — план объекта + `personnel` + `action_icons` (кликабельные действия).
 - **EnvironmentalObject** — схема + `photos` + `action_icons`.
-- **RoomInspection** (этапы 3–4, ADR-008) — двухуровневая навигация:
-  - `floor_plan` с `entrances` (кликабельные входы в комнаты);
-  - `Room.interior_photos` с `hotspots`;
-  - `expected_keywords` для проверки свободного вывода курсанта.
+- **SchemeDocument** (осмотр помещений, ADR-008 + ADR-012) — план одного объекта:
+  - `canvas_size`, опц. `background_image`;
+  - `layers: list[Layer]`.
+  - **Layer** — `name`, `visible: bool`, `locked: bool`, `z_order: int`, `items: list[SchemeItem]`.
+  - **SchemeItem** (база) — `id` + привязки: `photos`, `content`, `expected_keywords`. Подтипы:
+    - **Room** — `points: list[Point]` (прямоугольник = 4 точки; полигон = N точек);
+      `interior_photos` с хотспотами для второго уровня навигации.
+    - **Wall** — `start: Point`, `end: Point`, опц. `thickness`.
+    - **Marker** — `kind` (вход / личный состав / иконка действия), `position: Point`; для входа —
+      ссылка на связанную `Room`.
+    - **Hotspot** — зона на интерьерном фото: геометрия + `expected_keywords`.
+  - **Point** — `x: float`, `y: float` (координаты холста).
+  - Редактор (Constructor) и вьюер (Player, read-only) используют **один** тип `SchemeDocument`.
 - **Document** (механика «Вариант B», ADR-007):
   - `template_kind` (см. educase-document-templates);
   - предъявляется в списке с `decoys` (обманками) — курсант выбирает правильный;
@@ -68,6 +77,6 @@
 ## TODO по сверке (критично)
 - [ ] Заменить весь скелет на реальную схему из оригинального DATA_MODEL.md.
 - [ ] Поля и типы PatientCard, DocumentField, ObservationTimeline.
-- [ ] Точная структура `facility_scheme` / `action_icons` / `hotspots`.
+- [x] ~~Структура facility_scheme / action_icons / hotspots~~ — задана SchemeDocument (ADR-012).
 - [ ] Модель оценивания: что считается ошибкой, как формируется финальный отчёт.
 - [x] ~~Решить: SQLite у Constructor или только .educase~~ — документная модель, без БД (ADR-009).
