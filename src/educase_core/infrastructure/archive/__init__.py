@@ -18,4 +18,6 @@ from __future__ import annotations
 EDUCASE_EXT = ".educase"
 EDURESULT_EXT = ".eduresult"
 MANIFEST_NAME = "manifest.json"
+DATA_NAME = "data.json"
+ASSETS_DIR = "assets"
 FORMAT_VERSION = 1
