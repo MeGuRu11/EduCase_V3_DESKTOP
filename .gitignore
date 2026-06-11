@@ -27,6 +27,9 @@ dist/
 *.educase
 *.eduresult
 
+# --- Рабочий каталог приёмки (скриншоты, сэмплы) ---
+_scratch/
+
 # --- IDE ---
 .idea/
 .vscode/
