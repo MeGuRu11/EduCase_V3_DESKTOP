@@ -1,11 +1,13 @@
-"""Тесты фабрики build_stage_view — наличие/отсутствие SearchWidget."""
+"""Тесты фабрики build_stage_view — наличие/отсутствие SearchWidget и DocumentWidget."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget
 from pytestqt.qtbot import QtBot
 
+from educase_core.domain.documents import DocumentOption, DocumentTask
 from educase_core.domain.search import KeywordSearch, SearchEntry, SynonymSet
 from educase_core.domain.stages import StageClinical, StageContacts
+from educase_player.ui.document_widget import DocumentWidget
 from educase_player.ui.search_widget import SearchWidget
 from educase_player.ui.stage_views import build_stage_view
 
@@ -61,3 +63,28 @@ def test_stage_with_empty_entries_no_widget(qtbot: QtBot) -> None:
     qtbot.addWidget(view)
 
     assert _find_search_widget(view) is None
+
+
+def test_stage_with_documents_contains_document_widget(qtbot: QtBot) -> None:
+    """Этап с непустым documents → DocumentWidget присутствует для каждого DocumentTask."""
+    task = DocumentTask(
+        id="t1",
+        prompt="Выберите документ",
+        options=(DocumentOption(id="opt1", title="Документ А"),),
+    )
+    stage = StageClinical(documents=(task,))
+    view = build_stage_view(stage)
+    qtbot.addWidget(view)
+
+    widgets: list[DocumentWidget] = view.findChildren(DocumentWidget)
+    assert len(widgets) == 1
+
+
+def test_stage_without_documents_no_document_widget(qtbot: QtBot) -> None:
+    """Этап без documents → DocumentWidget отсутствует."""
+    stage = StageClinical(documents=())
+    view = build_stage_view(stage)
+    qtbot.addWidget(view)
+
+    widgets: list[DocumentWidget] = view.findChildren(DocumentWidget)
+    assert len(widgets) == 0

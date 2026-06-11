@@ -10,18 +10,20 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from educase_core.domain.stages import (
     Stage,
     StageClinical,
+    StageEnvironment,
     StageFinal,
     StagePatients,
     StageSes,
 )
+from educase_player.ui.document_widget import DocumentWidget
 from educase_player.ui.search_widget import SearchWidget
 
 
 def build_stage_view(stage: Stage) -> QWidget:
     """Создать виджет для этапа.
 
-    Содержит заголовок (stage.title), опционально intro, виджет поиска (если есть)
-    и строку-заглушку для ещё нереализованных частей этапа.
+    Содержит заголовок (stage.title), опционально intro, виджет поиска (если есть),
+    DocumentWidget на каждый DocumentTask (если есть) и строку-заглушку.
     """
     widget = QWidget()
     layout = QVBoxLayout(widget)
@@ -39,6 +41,10 @@ def build_stage_view(stage: Stage) -> QWidget:
         and stage.search.entries
     ):
         layout.addWidget(SearchWidget(stage.search))
+
+    if isinstance(stage, (StageClinical, StageEnvironment, StageSes)) and stage.documents:
+        for task in stage.documents:
+            layout.addWidget(DocumentWidget(task))
 
     layout.addWidget(QLabel("Рендерер этапа в разработке"))
     layout.addStretch()
