@@ -14,12 +14,22 @@ from educase_core.domain import (
     BranchPoint,
     Case,
     CaseMeta,
+    ChoiceMatch,
+    DateMatch,
+    DocumentField,
+    DocumentOption,
+    DocumentTask,
+    DocumentTemplate,
+    FieldType,
     KeywordSearch,
+    MatchRule,
+    NumberMatch,
     PatientCard,
     SearchEntry,
     StageClinical,
     StagePatients,
     SynonymSet,
+    TextMatch,
 )
 
 
@@ -75,12 +85,58 @@ class BranchDraft:
 
 
 @dataclass(frozen=True)
+class FieldDraft:
+    """Сырые значения поля документа из UI.
+
+    Числовые параметры (``number_*``) — сырые строки из полей ввода; парсинг и валидация —
+    в ``_build_field``. Заполнены только параметры, относящиеся к ``field_type``.
+    """
+
+    label: str
+    field_type: str
+    required: bool = True
+    keywords: SynonymSetDraft = SynonymSetDraft("")
+    number_value: str = ""
+    number_tolerance: str = ""
+    number_ndigits: str = ""
+    date_value: str = ""
+    choice_options: tuple[str, ...] = ()
+    choice_correct: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TemplateDraft:
+    """Сырые значения шаблона документа: заголовок + поля."""
+
+    title: str = ""
+    fields: tuple[FieldDraft, ...] = ()
+
+
+@dataclass(frozen=True)
+class DocumentOptionDraft:
+    """Сырые значения варианта выбора документа. Шаблон используется только при ``is_correct``."""
+
+    title: str = ""
+    is_correct: bool = False
+    template: TemplateDraft = TemplateDraft()
+
+
+@dataclass(frozen=True)
+class DocumentTaskDraft:
+    """Сырые значения задания выбрать документ: формулировка + варианты (с обманками)."""
+
+    prompt: str = ""
+    options: tuple[DocumentOptionDraft, ...] = ()
+
+
+@dataclass(frozen=True)
 class ClinicalDraft:
-    """Сырые значения этапа «Клинико-эпидемиологический диагноз»: вступление, поиск, развилка."""
+    """Сырые значения этапа «Клинический»: вступление, поиск, развилка, документы."""
 
     intro: str = ""
     search: SearchDraft = SearchDraft()
     branch: BranchDraft = BranchDraft()
+    documents: tuple[DocumentTaskDraft, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -146,16 +202,123 @@ def _build_branch(draft: BranchDraft) -> BranchPoint | None:
     return BranchPoint(id="branch", prompt=draft.prompt, options=tuple(options))
 
 
-def build_clinical(draft: ClinicalDraft) -> StageClinical:
-    """Собрать этап «Клинико-эпидемиологический диагноз» из ``ClinicalDraft``.
+def _parse_number(raw: str, label: str) -> float:
+    """Распарсить число из строки UI (запятая допустима как разделитель).
 
-    Документы (``documents``) в этом срезе пусты — их заполняет отдельный заход.
+    Пустая или непарсящаяся строка → ``ValueError`` с именем поля.
     """
+    try:
+        return float(raw.strip().replace(",", "."))
+    except ValueError:
+        raise ValueError(f"поле {label!r}: некорректное число") from None
+
+
+def _parse_ndigits(raw: str, label: str) -> int | None:
+    """Распарсить число знаков округления: пустая строка → ``None``, мусор → ``ValueError``."""
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        raise ValueError(f"поле {label!r}: некорректное число знаков") from None
+
+
+def _build_field(draft: FieldDraft, i: int) -> DocumentField:
+    """Собрать ``DocumentField`` из ``FieldDraft`` с правилом сверки по ``field_type``.
+
+    Неизвестный ``field_type`` и некорректные числовые параметры → ``ValueError``.
+    """
+    field_type = FieldType(draft.field_type)
+    rule: MatchRule
+    if field_type is FieldType.TEXT:
+        rule = TextMatch(
+            keywords=SynonymSet(
+                canonical=draft.keywords.canonical,
+                synonyms=draft.keywords.synonyms,
+            )
+        )
+    elif field_type is FieldType.NUMBER:
+        tolerance = (
+            _parse_number(draft.number_tolerance, draft.label)
+            if draft.number_tolerance.strip()
+            else 0.0
+        )
+        rule = NumberMatch(
+            value=_parse_number(draft.number_value, draft.label),
+            tolerance=tolerance,
+            ndigits=_parse_ndigits(draft.number_ndigits, draft.label),
+        )
+    elif field_type is FieldType.DATE:
+        rule = DateMatch(value=draft.date_value)
+    else:
+        rule = ChoiceMatch(correct=draft.choice_correct)
+    return DocumentField(
+        id=f"field-{i}",
+        type=field_type,
+        rule=rule,
+        label=draft.label,
+        options=draft.choice_options if field_type is FieldType.CHOICE else (),
+        required=draft.required,
+    )
+
+
+def _build_documents(
+    drafts: tuple[DocumentTaskDraft, ...],
+) -> tuple[DocumentTask, ...]:
+    """Собрать задания по документам из драфтов.
+
+    Варианты с пустым заголовком (после ``strip``) отбрасываются; задания с пустой
+    формулировкой И нулём валидных вариантов — тоже. Нумерация сквозная от 1: задания
+    ``doc-<i>``, варианты ``opt-<j>``, шаблон верного варианта ``tmpl-<j>``, поля
+    ``field-<i>``. Шаблон собирается только для верного варианта; у обманки ``template=None``.
+    """
+    tasks: list[DocumentTask] = []
+    for task in drafts:
+        options: list[DocumentOption] = []
+        for option in task.options:
+            if not option.title.strip():
+                continue
+            j = len(options) + 1
+            template = (
+                DocumentTemplate(
+                    id=f"tmpl-{j}",
+                    title=option.template.title,
+                    fields=tuple(
+                        _build_field(field, i + 1)
+                        for i, field in enumerate(option.template.fields)
+                    ),
+                )
+                if option.is_correct
+                else None
+            )
+            options.append(
+                DocumentOption(
+                    id=f"opt-{j}",
+                    title=option.title,
+                    is_correct=option.is_correct,
+                    template=template,
+                )
+            )
+        if not task.prompt.strip() and not options:
+            continue
+        tasks.append(
+            DocumentTask(
+                id=f"doc-{len(tasks) + 1}",
+                prompt=task.prompt,
+                options=tuple(options),
+            )
+        )
+    return tuple(tasks)
+
+
+def build_clinical(draft: ClinicalDraft) -> StageClinical:
+    """Собрать этап «Клинико-эпидемиологический диагноз» из ``ClinicalDraft``."""
     return StageClinical(
         intro=draft.intro,
         search=_build_search(draft.search),
         branch=_build_branch(draft.branch),
-        documents=(),
+        documents=_build_documents(draft.documents),
     )
 
 
@@ -197,10 +360,14 @@ __all__ = [
     "BranchOptionDraft",
     "CaseDraft",
     "ClinicalDraft",
+    "DocumentOptionDraft",
+    "DocumentTaskDraft",
+    "FieldDraft",
     "PatientDraft",
     "SearchDraft",
     "SearchEntryDraft",
     "SynonymSetDraft",
+    "TemplateDraft",
     "build_case",
     "build_clinical",
 ]

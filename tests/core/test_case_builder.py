@@ -1,6 +1,8 @@
 """Тесты сборки ``Case`` из ``CaseDraft`` (CONSTRUCTOR-01, слой приложения)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from educase_core.application.case_builder import (
@@ -8,13 +10,27 @@ from educase_core.application.case_builder import (
     BranchOptionDraft,
     CaseDraft,
     ClinicalDraft,
+    DocumentOptionDraft,
+    DocumentTaskDraft,
+    FieldDraft,
     PatientDraft,
     SearchDraft,
     SearchEntryDraft,
     SynonymSetDraft,
+    TemplateDraft,
+    _build_field,
     build_case,
 )
-from educase_core.domain import Case, StageClinical, StageFinal
+from educase_core.domain import (
+    Case,
+    ChoiceMatch,
+    DateMatch,
+    FieldType,
+    NumberMatch,
+    StageClinical,
+    StageFinal,
+    TextMatch,
+)
 
 
 def test_build_case_with_meta_and_patients() -> None:
@@ -156,3 +172,183 @@ def test_build_case_clinical_round_trip_to_dict() -> None:
     case = build_case(CaseDraft(case_id="case-rt", clinical=_clinical_draft()))
     restored = Case.from_dict(case.to_dict())
     assert restored.clinical == case.clinical
+
+
+# --- Документы: сборка полей по типу правила ---
+
+
+def test_build_field_text_rule() -> None:
+    """Поле ``text`` → ``TextMatch`` с переданными ключевыми словами; id и тип проставлены."""
+    field = _build_field(
+        FieldDraft(
+            label="Диагноз",
+            field_type="text",
+            keywords=SynonymSetDraft(canonical="сальмонеллёз", synonyms=("salmonella",)),
+        ),
+        1,
+    )
+    assert field.id == "field-1"
+    assert field.type is FieldType.TEXT
+    assert field.label == "Диагноз"
+    assert isinstance(field.rule, TextMatch)
+    assert field.rule.keywords.canonical == "сальмонеллёз"
+    assert field.rule.keywords.synonyms == ("salmonella",)
+
+
+def test_build_field_number_rule_comma_tolerance_ndigits() -> None:
+    """Поле ``number`` → ``NumberMatch``: запятая→точка, допуск и ndigits разобраны."""
+    field = _build_field(
+        FieldDraft(
+            label="Температура",
+            field_type="number",
+            number_value="38,5",
+            number_tolerance="0,2",
+            number_ndigits="1",
+        ),
+        2,
+    )
+    assert field.id == "field-2"
+    assert field.type is FieldType.NUMBER
+    assert isinstance(field.rule, NumberMatch)
+    assert field.rule.value == 38.5
+    assert field.rule.tolerance == 0.2
+    assert field.rule.ndigits == 1
+
+
+def test_build_field_number_defaults_when_optional_blank() -> None:
+    """Пустые допуск/ndigits → ``tolerance=0.0`` и ``ndigits=None``."""
+    field = _build_field(FieldDraft(label="N", field_type="number", number_value="10"), 1)
+    assert isinstance(field.rule, NumberMatch)
+    assert field.rule.tolerance == 0.0
+    assert field.rule.ndigits is None
+
+
+def test_build_field_number_empty_value_raises() -> None:
+    """Пустое значение числа → ``ValueError`` с именем поля."""
+    with pytest.raises(ValueError, match="Доза"):
+        _build_field(FieldDraft(label="Доза", field_type="number", number_value="  "), 1)
+
+
+def test_build_field_number_garbage_ndigits_raises() -> None:
+    """Нечисловые знаки округления → ``ValueError``."""
+    with pytest.raises(ValueError):
+        _build_field(
+            FieldDraft(
+                label="N",
+                field_type="number",
+                number_value="1",
+                number_ndigits="abc",
+            ),
+            1,
+        )
+
+
+def test_build_field_date_rule() -> None:
+    """Поле ``date`` → ``DateMatch`` с ISO-строкой."""
+    field = _build_field(FieldDraft(label="Дата", field_type="date", date_value="2026-06-11"), 1)
+    assert field.type is FieldType.DATE
+    assert isinstance(field.rule, DateMatch)
+    assert field.rule.value == "2026-06-11"
+
+
+def test_build_field_choice_rule_with_options() -> None:
+    """Поле ``choice`` → ``ChoiceMatch`` с верными; ``options`` хранят все варианты."""
+    field = _build_field(
+        FieldDraft(
+            label="Тяжесть",
+            field_type="choice",
+            choice_options=("лёгкая", "средняя", "тяжёлая"),
+            choice_correct=("средняя", "тяжёлая"),
+        ),
+        1,
+    )
+    assert field.type is FieldType.CHOICE
+    assert isinstance(field.rule, ChoiceMatch)
+    assert field.rule.correct == ("средняя", "тяжёлая")
+    assert field.options == ("лёгкая", "средняя", "тяжёлая")
+
+
+# --- Документы: сборка заданий с верной опцией и обманкой ---
+
+
+def _document_draft() -> DocumentTaskDraft:
+    return DocumentTaskDraft(
+        prompt="Выберите донесение",
+        options=(
+            DocumentOptionDraft(
+                title="Внеочередное донесение",
+                is_correct=True,
+                template=TemplateDraft(
+                    title="ДМ-4",
+                    fields=(
+                        FieldDraft(label="Дата", field_type="date", date_value="2026-06-11"),
+                    ),
+                ),
+            ),
+            DocumentOptionDraft(title="Обычная справка", is_correct=False),
+        ),
+    )
+
+
+def test_build_case_clinical_document_correct_and_decoy() -> None:
+    """Документ: верная опция несёт шаблон с полями, обманка — ``template=None``."""
+    clinical = ClinicalDraft(documents=(_document_draft(),))
+    case = build_case(CaseDraft(case_id="case-doc", clinical=clinical))
+
+    documents = case.clinical.documents
+    assert len(documents) == 1
+    task = documents[0]
+    assert task.id == "doc-1"
+    assert task.prompt == "Выберите донесение"
+    assert len(task.options) == 2
+
+    correct, decoy = task.options
+    assert correct.id == "opt-1"
+    assert correct.is_correct is True
+    assert correct.template is not None
+    assert correct.template.id == "tmpl-1"
+    assert correct.template.title == "ДМ-4"
+    assert len(correct.template.fields) == 1
+    assert correct.template.fields[0].id == "field-1"
+    assert isinstance(correct.template.fields[0].rule, DateMatch)
+
+    assert decoy.id == "opt-2"
+    assert decoy.is_correct is False
+    assert decoy.template is None
+
+
+def test_build_case_clinical_drops_blank_option_and_task() -> None:
+    """Опции с пустым title и задания без prompt и опций отбрасываются."""
+    clinical = ClinicalDraft(
+        documents=(
+            DocumentTaskDraft(
+                prompt="Есть формулировка",
+                options=(
+                    DocumentOptionDraft(title="   "),
+                    DocumentOptionDraft(title="Годная опция"),
+                ),
+            ),
+            DocumentTaskDraft(prompt="   ", options=()),
+        )
+    )
+    case = build_case(CaseDraft(case_id="case-drop", clinical=clinical))
+
+    documents = case.clinical.documents
+    assert len(documents) == 1
+    assert documents[0].id == "doc-1"
+    assert len(documents[0].options) == 1
+    assert documents[0].options[0].id == "opt-1"
+    assert documents[0].options[0].title == "Годная опция"
+
+
+def test_build_case_clinical_documents_round_trip_codec(tmp_path: Path) -> None:
+    """round-trip через кодек .educase: ``clinical.documents`` сохраняются (save→load)."""
+    from educase_core.application.cases import load_case, save_case
+
+    clinical = ClinicalDraft(documents=(_document_draft(),))
+    case = build_case(CaseDraft(case_id="case-rt-doc", clinical=clinical))
+
+    dst = save_case(case, tmp_path / "case")
+    loaded = load_case(dst)
+    assert loaded.case.clinical.documents == case.clinical.documents
+    assert loaded.case == case

@@ -1,8 +1,8 @@
-"""Редактор этапа 2 «Клинико-эпидемиологический диагноз» (Constructor): поиск + развилка.
+"""Редактор этапа 2 «Клинико-эпидемиологический диагноз» (Constructor).
 
-Без визуальной полировки: только функциональные виджеты и layout-менеджеры. Публичные поля
-ввода и вложенные редакторы — точки доступа для тестов. Сборка значений в драфт — через
-``to_draft``. Документы — слот под отдельный заход; здесь не добавляются.
+Поиск, развилка и задания по документам. Без визуальной полировки: только функциональные
+виджеты и layout-менеджеры. Публичные поля ввода и вложенные редакторы — точки доступа для
+тестов. Сборка значений в драфт — через ``to_draft``.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from educase_constructor.ui.branch_editor import BranchEditor
+from educase_constructor.ui.document_editor import DocumentListEditor
 from educase_constructor.ui.search_editor import SearchEditor
 from educase_core.application.case_builder import ClinicalDraft
 
@@ -28,6 +29,7 @@ class ClinicalEditor(QWidget):
         self.intro_edit = QLineEdit(self)
         self.search_editor = SearchEditor(self)
         self.branch_editor = BranchEditor(self)
+        self.documents_editor = DocumentListEditor(self)
 
         intro_form = QFormLayout()
         intro_form.addRow("Вступление", self.intro_edit)
@@ -40,15 +42,21 @@ class ClinicalEditor(QWidget):
         branch_box_layout = QVBoxLayout(branch_box)
         branch_box_layout.addWidget(self.branch_editor)
 
+        documents_box = QGroupBox("Документы")
+        documents_box_layout = QVBoxLayout(documents_box)
+        documents_box_layout.addWidget(self.documents_editor)
+
         layout = QVBoxLayout(self)
         layout.addLayout(intro_form)
         layout.addWidget(search_box)
         layout.addWidget(branch_box)
+        layout.addWidget(documents_box)
 
     def to_draft(self) -> ClinicalDraft:
-        """Собрать ``ClinicalDraft`` из вступления, поиска и развилки."""
+        """Собрать ``ClinicalDraft`` из вступления, поиска, развилки и документов."""
         return ClinicalDraft(
             intro=self.intro_edit.text(),
             search=self.search_editor.to_draft(),
             branch=self.branch_editor.to_draft(),
+            documents=self.documents_editor.to_draft(),
         )
