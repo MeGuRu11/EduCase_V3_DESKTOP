@@ -18,6 +18,13 @@ from educase_core.domain.documents import (
     TextMatch,
     match_rule_from_dict,
 )
+from educase_core.domain.epidemiology import (
+    SesLevel,
+    classify_ses,
+    extensive_indicator,
+    intensive_indicator,
+    intensive_indicator_period,
+)
 from educase_core.domain.search import (
     InspectionCheck,
     KeywordSearch,
@@ -59,6 +66,7 @@ __all__ = [
     "NumberMatch",
     "PatientCard",
     "SearchEntry",
+    "SesLevel",
     "Stage",
     "StageClinical",
     "StageContacts",
@@ -70,5 +78,9 @@ __all__ = [
     "SynonymSet",
     "TextMatch",
     "Timeline",
+    "classify_ses",
+    "extensive_indicator",
+    "intensive_indicator",
+    "intensive_indicator_period",
     "match_rule_from_dict",
 ]
