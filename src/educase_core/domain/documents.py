@@ -44,6 +44,10 @@ class TextMatch:
     TYPE: ClassVar[str] = "text"
     keywords: SynonymSet
 
+    def accepts(self, answer: str) -> bool:
+        """Принять ответ при точном совпадении с одним из ключевых слов (ADR-006)."""
+        return self.keywords.matches(answer)
+
     def to_dict(self) -> dict[str, object]:
         return {"type": self.TYPE, "keywords": self.keywords.to_dict()}
 
@@ -60,6 +64,20 @@ class NumberMatch:
     value: float
     tolerance: float = 0.0
     ndigits: int | None = None
+
+    def accepts(self, answer: str) -> bool:
+        """Принять число в пределах допуска. Непарсящийся ответ — ``False`` (ADR-008).
+
+        Перед парсингом запятая заменяется точкой; при заданном ``ndigits`` распарсенное
+        значение округляется до указанного числа знаков.
+        """
+        try:
+            parsed = float(answer.strip().replace(",", "."))
+        except ValueError:
+            return False
+        if self.ndigits is not None:
+            parsed = round(parsed, self.ndigits)
+        return abs(parsed - self.value) <= self.tolerance
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -85,6 +103,10 @@ class DateMatch:
     TYPE: ClassVar[str] = "date"
     value: str = ""
 
+    def accepts(self, answer: str) -> bool:
+        """Принять дату при точном равенстве строк (ISO ожидается); пробелы обрезаются."""
+        return answer.strip() == self.value.strip()
+
     def to_dict(self) -> dict[str, object]:
         return {"type": self.TYPE, "value": self.value}
 
@@ -99,6 +121,11 @@ class ChoiceMatch:
 
     TYPE: ClassVar[str] = "choice"
     correct: tuple[str, ...] = ()
+
+    def accepts(self, answer: str) -> bool:
+        """Принять выбор: нормализованный (casefold + strip) ответ есть среди допустимых."""
+        normalized = answer.strip().casefold()
+        return any(normalized == option.strip().casefold() for option in self.correct)
 
     def to_dict(self) -> dict[str, object]:
         return {"type": self.TYPE, "correct": list(self.correct)}
@@ -135,6 +162,12 @@ class DocumentField:
     label: str = ""
     options: tuple[str, ...] = ()
     required: bool = True
+
+    def check(self, answer: str) -> bool:
+        """Сверить ответ с правилом поля. Пустой ответ необязательного поля принимается."""
+        if not answer.strip() and not self.required:
+            return True
+        return self.rule.accepts(answer)
 
     def to_dict(self) -> dict[str, object]:
         return {
