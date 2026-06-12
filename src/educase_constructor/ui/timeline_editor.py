@@ -65,6 +65,8 @@ class TimelineEditor(QWidget):
             event_item = self.events_table.item(row, 1)
             date = date_item.text() if date_item is not None else ""
             event = event_item.text() if event_item is not None else ""
+            if not date.strip() and not event.strip():
+                continue
             rows.append((date, event))
         return tuple(rows)
 

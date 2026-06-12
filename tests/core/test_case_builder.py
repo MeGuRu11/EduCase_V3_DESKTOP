@@ -25,6 +25,7 @@ from educase_core.application.case_builder import (
     TemplateDraft,
     TimelineDraft,
     _build_field,
+    _field_is_blank,
     build_case,
 )
 from educase_core.domain import (
@@ -592,3 +593,159 @@ def test_build_case_ses_final_round_trip_to_dict() -> None:
     restored = Case.from_dict(case.to_dict())
     assert restored.ses == case.ses
     assert restored.final == case.final
+
+
+# --- Фиксы коллапса пустого и непокрытые инварианты (адресный ревью) ---
+
+
+def test_field_is_blank_by_type() -> None:
+    """``_field_is_blank``: пусто, когда нет подписи И нет значения правила по типу."""
+    assert _field_is_blank(FieldDraft(label="  ", field_type="text"))
+    assert _field_is_blank(FieldDraft(label="", field_type="number"))
+    assert _field_is_blank(FieldDraft(label="", field_type="date"))
+    assert _field_is_blank(FieldDraft(label="", field_type="choice"))
+    # Непустая подпись → не пусто.
+    assert not _field_is_blank(FieldDraft(label="Доза", field_type="number"))
+    # Непустое значение правила по своему типу → не пусто.
+    assert not _field_is_blank(
+        FieldDraft(label="", field_type="text", keywords=SynonymSetDraft("сыпь"))
+    )
+    assert not _field_is_blank(
+        FieldDraft(label="", field_type="date", date_value="2026-06-01")
+    )
+    assert not _field_is_blank(
+        FieldDraft(label="", field_type="choice", choice_correct=("a",))
+    )
+    # Неизвестный тип — НЕ считается пустым.
+    assert not _field_is_blank(FieldDraft(label="", field_type="bogus"))
+
+
+def test_build_case_ses_level_choice_collapses_empty_choice() -> None:
+    """Пустое CHOICE-поле уровня (нет подписи и верных) → ``level_choice`` равен ``None``."""
+    ses = SesDraft(level_choice=FieldDraft(label="  ", field_type="choice"))
+    case = build_case(CaseDraft(case_id="case-lc", ses=ses))
+    assert case.ses.level_choice is None
+
+
+def test_build_case_ses_level_choice_collapses_empty_text() -> None:
+    """Пустое TEXT-поле уровня (нет подписи и ключевых слов) → ``level_choice`` равен ``None``."""
+    ses = SesDraft(
+        level_choice=FieldDraft(
+            label="", field_type="text", keywords=SynonymSetDraft("")
+        )
+    )
+    case = build_case(CaseDraft(case_id="case-lt", ses=ses))
+    assert case.ses.level_choice is None
+
+
+def test_build_case_documents_drops_blank_template_field() -> None:
+    """Пустое поле шаблона отбрасывается; оставшимся id ``field-<i>`` без дыр."""
+    task = DocumentTaskDraft(
+        prompt="Выберите акт",
+        options=(
+            DocumentOptionDraft(
+                title="Акт",
+                is_correct=True,
+                template=TemplateDraft(
+                    title="Шаблон",
+                    fields=(
+                        FieldDraft(
+                            label="Дата", field_type="date", date_value="2026-06-01"
+                        ),
+                        FieldDraft(
+                            label="", field_type="text", keywords=SynonymSetDraft("")
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    clinical = ClinicalDraft(documents=(task,))
+    case = build_case(CaseDraft(case_id="case-bf", clinical=clinical))
+
+    template = case.clinical.documents[0].options[0].template
+    assert template is not None
+    assert len(template.fields) == 1
+    assert template.fields[0].id == "field-1"
+    assert template.fields[0].label == "Дата"
+
+
+def test_build_case_documents_blank_number_field_does_not_raise() -> None:
+    """Пустое NUMBER-поле шаблона отбрасывается, а не роняет сборку через ``ValueError``."""
+    task = DocumentTaskDraft(
+        prompt="Выберите акт",
+        options=(
+            DocumentOptionDraft(
+                title="Акт",
+                is_correct=True,
+                template=TemplateDraft(
+                    fields=(
+                        FieldDraft(label="", field_type="number", number_value=""),
+                    ),
+                ),
+            ),
+        ),
+    )
+    clinical = ClinicalDraft(documents=(task,))
+    case = build_case(CaseDraft(case_id="case-bn", clinical=clinical))
+
+    template = case.clinical.documents[0].options[0].template
+    assert template is not None
+    assert template.fields == ()
+
+
+def test_build_field_negative_ndigits_raises() -> None:
+    """Отрицательное число знаков округления → ``ValueError``."""
+    with pytest.raises(ValueError, match="отрицательным"):
+        _build_field(
+            FieldDraft(
+                label="N",
+                field_type="number",
+                number_value="1",
+                number_ndigits="-2",
+            ),
+            1,
+        )
+
+
+def test_build_case_patients_stage_has_no_intro_or_search() -> None:
+    """Пиннинг (W1): этап «Пациенты» намеренно без stage-level intro и search."""
+    case = build_case(
+        CaseDraft(
+            case_id="case-p",
+            patients=(PatientDraft(id="p1", title="Пациент 1"),),
+        )
+    )
+    assert case.patients.intro == ""
+    assert case.patients.search is None
+
+
+def test_build_field_choice_correct_outside_options_kept() -> None:
+    """Пиннинг (W4/K2): ``choice_correct`` вне ``choice_options`` собирается без валидации."""
+    field = _build_field(
+        FieldDraft(
+            label="Уровень",
+            field_type="choice",
+            choice_options=("благополучное", "чрезвычайное"),
+            choice_correct=("несуществующее",),
+        ),
+        1,
+    )
+    assert isinstance(field.rule, ChoiceMatch)
+    assert field.rule.correct == ("несуществующее",)
+    assert field.options == ("благополучное", "чрезвычайное")
+
+
+def test_build_case_stage_intros_round_trip() -> None:
+    """intro этапов environment/ses/final сохраняется через ``to_dict`` → ``from_dict``."""
+    draft = CaseDraft(
+        case_id="case-intro",
+        environment=EnvironmentDraft(intro="Осмотр среды"),
+        ses=SesDraft(intro="Оценка СЭС"),
+        final=FinalDraft(intro="Окончательный диагноз"),
+    )
+    case = build_case(draft)
+    restored = Case.from_dict(case.to_dict())
+    assert restored.environment.intro == "Осмотр среды"
+    assert restored.ses.intro == "Оценка СЭС"
+    assert restored.final.intro == "Окончательный диагноз"

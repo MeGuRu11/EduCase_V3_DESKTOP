@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QTableWidgetItem
 from pytestqt.qtbot import QtBot
 
 from educase_constructor.ui.final_editor import FinalEditor
+from educase_core.application.case_builder import build_final
 
 
 def test_add_and_remove_timeline(qtbot: QtBot) -> None:
@@ -92,3 +93,32 @@ def test_empty_editor_to_draft(qtbot: QtBot) -> None:
     assert draft.search.entries == ()
     assert draft.documents == ()
     assert draft.timelines == ()
+
+
+def test_timeline_editor_drops_blank_rows(qtbot: QtBot) -> None:
+    """Полностью пустая строка таблицы событий отбрасывается в ``to_draft`` (W6)."""
+    editor = FinalEditor()
+    qtbot.addWidget(editor)
+
+    editor.timelines_editor.add_timeline_button.click()
+    timeline = editor.timelines_editor.timeline_editors[0]
+    timeline.add_row_button.click()  # пустая строка — без ввода
+    timeline.add_row_button.click()
+    timeline.events_table.setItem(1, 0, QTableWidgetItem("2026-06-01"))
+    timeline.events_table.setItem(1, 1, QTableWidgetItem("Завоз"))
+
+    draft = timeline.to_draft()
+    assert draft.events == (("2026-06-01", "Завоз"),)
+
+
+def test_build_final_drops_timeline_with_only_blank_rows(qtbot: QtBot) -> None:
+    """Таймлайн с пустым заголовком и только пустыми строками отбрасывается билдером (W6)."""
+    editor = FinalEditor()
+    qtbot.addWidget(editor)
+
+    editor.timelines_editor.add_timeline_button.click()
+    timeline = editor.timelines_editor.timeline_editors[0]
+    timeline.add_row_button.click()  # пустая строка, без ввода
+
+    stage = build_final(editor.to_draft())
+    assert stage.timelines == ()

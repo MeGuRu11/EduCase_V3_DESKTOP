@@ -279,14 +279,44 @@ def _parse_number(raw: str, label: str) -> float:
 
 
 def _parse_ndigits(raw: str, label: str) -> int | None:
-    """Распарсить число знаков округления: пустая строка → ``None``, мусор → ``ValueError``."""
+    """Распарсить число знаков округления: пустая строка → ``None``, мусор → ``ValueError``.
+
+    Отрицательное число знаков запрещено (округление до десятков/сотен — не задумано).
+    """
     text = raw.strip()
     if not text:
         return None
     try:
-        return int(text)
+        value = int(text)
     except ValueError:
         raise ValueError(f"поле {label!r}: некорректное число знаков") from None
+    if value < 0:
+        raise ValueError(f"поле {label!r}: число знаков не может быть отрицательным")
+    return value
+
+
+def _field_is_blank(draft: FieldDraft) -> bool:
+    """Поле пусто, если нет подписи (после ``strip``) И нет значения правила по его типу.
+
+    Значение правила по типу: TEXT → ``keywords.canonical``; NUMBER → ``number_value``;
+    DATE → ``date_value``; CHOICE → ``choice_correct``. Для неизвестного ``field_type`` поле
+    НЕ считается пустым (его соберёт ``_build_field`` со своей диагностикой). Используется для
+    коллапса пустого выбора уровня (``_build_level``) и отбрасывания пустых полей шаблона
+    (``_build_documents``).
+    """
+    if draft.label.strip():
+        return False
+    try:
+        field_type = FieldType(draft.field_type)
+    except ValueError:
+        return False
+    if field_type is FieldType.TEXT:
+        return not draft.keywords.canonical.strip()
+    if field_type is FieldType.NUMBER:
+        return not draft.number_value.strip()
+    if field_type is FieldType.DATE:
+        return not draft.date_value.strip()
+    return not draft.choice_correct
 
 
 def _build_field(draft: FieldDraft, i: int) -> DocumentField:
@@ -334,9 +364,11 @@ def _build_documents(
     """Собрать задания по документам из драфтов.
 
     Варианты с пустым заголовком (после ``strip``) отбрасываются; задания с пустой
-    формулировкой И нулём валидных вариантов — тоже. Нумерация сквозная от 1: задания
-    ``doc-<i>``, варианты ``opt-<j>``, шаблон верного варианта ``tmpl-<j>``, поля
-    ``field-<i>``. Шаблон собирается только для верного варианта; у обманки ``template=None``.
+    формулировкой И нулём валидных вариантов — тоже. Пустые поля шаблона
+    (``_field_is_blank``) отбрасываются ДО нумерации, чтобы id ``field-<i>`` шли без дыр по
+    оставшимся полям. Нумерация сквозная от 1: задания ``doc-<i>``, варианты ``opt-<j>``,
+    шаблон верного варианта ``tmpl-<j>``, поля ``field-<i>``. Шаблон собирается только для
+    верного варианта; у обманки ``template=None``.
     """
     tasks: list[DocumentTask] = []
     for task in drafts:
@@ -351,7 +383,9 @@ def _build_documents(
                     title=option.template.title,
                     fields=tuple(
                         _build_field(field, i + 1)
-                        for i, field in enumerate(option.template.fields)
+                        for i, field in enumerate(
+                            f for f in option.template.fields if not _field_is_blank(f)
+                        )
                     ),
                 )
                 if option.is_correct
@@ -428,8 +462,10 @@ def _build_level(draft: FieldDraft | None) -> DocumentField | None:
     """Собрать поле выбора уровня СЭС из ``FieldDraft`` (или ``None``, если он не задан).
 
     Единичное поле с фиксированным id ``field-1``; правило сверки выбирает ``_build_field``.
+    Пустое поле (``_field_is_blank``) тоже коллапсирует в ``None``: иначе включённый флаг при
+    незаполненном поле создал бы обязательное поле с невыполнимым правилом.
     """
-    if draft is None:
+    if draft is None or _field_is_blank(draft):
         return None
     return _build_field(draft, 1)
 

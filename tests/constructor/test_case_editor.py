@@ -78,3 +78,13 @@ def test_unit_personnel_parsing(qtbot: QtBot) -> None:
     assert editor.to_draft().unit_personnel is None
     editor.unit_personnel_edit.setText("abc")
     assert editor.to_draft().unit_personnel is None
+
+
+def test_unit_personnel_invalid_formats_are_none(qtbot: QtBot) -> None:
+    """Пиннинг (W5): «3.5», «1 000», «150abc» молча дают None (контракт не меняем)."""
+    editor = CaseEditor()
+    qtbot.addWidget(editor)
+
+    for text in ("3.5", "1 000", "150abc"):
+        editor.unit_personnel_edit.setText(text)
+        assert editor.to_draft().unit_personnel is None
