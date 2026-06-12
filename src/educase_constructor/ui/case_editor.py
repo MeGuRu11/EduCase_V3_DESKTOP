@@ -20,12 +20,14 @@ from PySide6.QtWidgets import (
 from educase_constructor.ui.clinical_editor import ClinicalEditor
 from educase_constructor.ui.contacts_editor import ContactsEditor
 from educase_constructor.ui.environment_editor import EnvironmentEditor
+from educase_constructor.ui.final_editor import FinalEditor
 from educase_constructor.ui.patient_editor import PatientEditor
+from educase_constructor.ui.ses_editor import SesEditor
 from educase_core.application.case_builder import CaseDraft
 
 
 class CaseEditor(QWidget):
-    """Редактор меты кейса и этапа «Пациенты»."""
+    """Редактор меты кейса и всех шести этапов прохождения."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -76,6 +78,16 @@ class CaseEditor(QWidget):
         environment_box_layout = QVBoxLayout(environment_box)
         environment_box_layout.addWidget(self.environment_editor)
 
+        self.ses_editor = SesEditor(self)
+        ses_box = QGroupBox("Оценка СЭС")
+        ses_box_layout = QVBoxLayout(ses_box)
+        ses_box_layout.addWidget(self.ses_editor)
+
+        self.final_editor = FinalEditor(self)
+        final_box = QGroupBox("Окончательный эпидемиологический диагноз")
+        final_box_layout = QVBoxLayout(final_box)
+        final_box_layout.addWidget(self.final_editor)
+
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Кейс"))
         layout.addLayout(meta_form)
@@ -83,6 +95,8 @@ class CaseEditor(QWidget):
         layout.addWidget(clinical_box)
         layout.addWidget(contacts_box)
         layout.addWidget(environment_box)
+        layout.addWidget(ses_box)
+        layout.addWidget(final_box)
         layout.addStretch(1)
 
     def add_patient(self) -> None:
@@ -120,4 +134,6 @@ class CaseEditor(QWidget):
             clinical=self.clinical_editor.to_draft(),
             contacts=self.contacts_editor.to_draft(),
             environment=self.environment_editor.to_draft(),
+            ses=self.ses_editor.to_draft(),
+            final=self.final_editor.to_draft(),
         )

@@ -15,12 +15,15 @@ from educase_core.application.case_builder import (
     DocumentTaskDraft,
     EnvironmentDraft,
     FieldDraft,
+    FinalDraft,
     InspectionDraft,
     PatientDraft,
     SearchDraft,
     SearchEntryDraft,
+    SesDraft,
     SynonymSetDraft,
     TemplateDraft,
+    TimelineDraft,
     _build_field,
     build_case,
 )
@@ -34,6 +37,7 @@ from educase_core.domain import (
     StageContacts,
     StageEnvironment,
     StageFinal,
+    StageSes,
     TextMatch,
 )
 
@@ -457,3 +461,134 @@ def test_build_case_contacts_environment_round_trip_to_dict() -> None:
     restored = Case.from_dict(case.to_dict())
     assert restored.contacts == case.contacts
     assert restored.environment == case.environment
+
+
+# --- Этапы 5–6: оценка СЭС и окончательный диагноз ---
+
+
+def test_build_case_without_ses_and_final_default_stages() -> None:
+    """``CaseDraft`` без ses/final → дефолтные пустые этапы 5 и 6."""
+    case = build_case(CaseDraft(case_id="case-sf"))
+    assert case.ses == StageSes()
+    assert case.final == StageFinal()
+
+
+def test_build_case_ses_level_choice_and_documents() -> None:
+    """``ses`` → поле выбора уровня (CHOICE → ``ChoiceMatch``), поиск и документы как заданы."""
+    ses = SesDraft(
+        intro="Оцените СЭС",
+        search=SearchDraft(
+            entries=(SearchEntryDraft(triggers=SynonymSetDraft(canonical="вспышка")),),
+        ),
+        level_choice=FieldDraft(
+            label="Уровень СЭС",
+            field_type="choice",
+            choice_options=(
+                "благополучное",
+                "неустойчивое",
+                "неблагополучное",
+                "чрезвычайное",
+            ),
+            choice_correct=("чрезвычайное",),
+        ),
+        documents=(
+            DocumentTaskDraft(
+                prompt="Выберите Прил. 22",
+                options=(DocumentOptionDraft(title="Приложение 22"),),
+            ),
+        ),
+    )
+    case = build_case(CaseDraft(case_id="case-ses", ses=ses))
+
+    level = case.ses.level_choice
+    assert level is not None
+    assert level.id == "field-1"
+    assert level.type is FieldType.CHOICE
+    assert level.label == "Уровень СЭС"
+    assert isinstance(level.rule, ChoiceMatch)
+    assert level.rule.correct == ("чрезвычайное",)
+    assert level.options == (
+        "благополучное",
+        "неустойчивое",
+        "неблагополучное",
+        "чрезвычайное",
+    )
+
+    search = case.ses.search
+    assert search is not None
+    assert search.entries[0].triggers.canonical == "вспышка"
+    assert len(case.ses.documents) == 1
+    assert case.ses.documents[0].id == "doc-1"
+    assert case.ses.documents[0].prompt == "Выберите Прил. 22"
+
+
+def test_build_case_ses_level_choice_none_when_draft_none() -> None:
+    """``level_choice=None`` в драфте → ``case.ses.level_choice`` равен ``None``."""
+    case = build_case(CaseDraft(case_id="case-sn", ses=SesDraft(level_choice=None)))
+    assert case.ses.level_choice is None
+
+
+def test_build_case_final_timelines_documents_search() -> None:
+    """``final`` → таймлайны (``tl-<i>``), документы и поиск; пустые таймлайны отброшены."""
+    final = FinalDraft(
+        intro="Окончательный диагноз",
+        search=SearchDraft(
+            entries=(SearchEntryDraft(triggers=SynonymSetDraft(canonical="источник")),),
+        ),
+        documents=(
+            DocumentTaskDraft(
+                prompt="Выберите акт",
+                options=(DocumentOptionDraft(title="Акт расследования"),),
+            ),
+        ),
+        timelines=(
+            TimelineDraft(title="", events=()),  # пустой — отбрасывается
+            TimelineDraft(
+                title="Очаг",
+                events=(("2026-06-01", "Завоз"), ("2026-06-10", "Снятие")),
+            ),
+        ),
+    )
+    case = build_case(CaseDraft(case_id="case-fin", final=final))
+
+    assert len(case.final.timelines) == 1
+    timeline = case.final.timelines[0]
+    assert timeline.id == "tl-1"
+    assert timeline.title == "Очаг"
+    assert timeline.events == (("2026-06-01", "Завоз"), ("2026-06-10", "Снятие"))
+
+    search = case.final.search
+    assert search is not None
+    assert search.entries[0].triggers.canonical == "источник"
+    assert len(case.final.documents) == 1
+    assert case.final.documents[0].options[0].title == "Акт расследования"
+
+
+def test_build_case_final_keeps_timeline_with_events_but_blank_title() -> None:
+    """Таймлайн с пустым заголовком, но с событиями — сохраняется (id ``tl-1``)."""
+    final = FinalDraft(
+        timelines=(TimelineDraft(title="   ", events=(("2026-06-01", "Завоз"),)),)
+    )
+    case = build_case(CaseDraft(case_id="case-ft", final=final))
+    assert len(case.final.timelines) == 1
+    assert case.final.timelines[0].id == "tl-1"
+    assert case.final.timelines[0].events == (("2026-06-01", "Завоз"),)
+
+
+def test_build_case_ses_final_round_trip_to_dict() -> None:
+    """round-trip: build_case(...).to_dict() → Case.from_dict(...) сохраняет ses и final."""
+    ses = SesDraft(
+        level_choice=FieldDraft(
+            label="Уровень",
+            field_type="choice",
+            choice_options=("благополучное", "чрезвычайное"),
+            choice_correct=("чрезвычайное",),
+        ),
+    )
+    final = FinalDraft(
+        timelines=(TimelineDraft(title="Очаг", events=(("2026-06-01", "Завоз"),)),),
+    )
+    case = build_case(CaseDraft(case_id="case-rt56", ses=ses, final=final))
+    restored = Case.from_dict(case.to_dict())
+    assert restored.ses == case.ses
+    assert restored.final == case.final

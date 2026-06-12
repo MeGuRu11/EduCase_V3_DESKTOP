@@ -30,9 +30,12 @@ from educase_core.domain import (
     StageClinical,
     StageContacts,
     StageEnvironment,
+    StageFinal,
     StagePatients,
+    StageSes,
     SynonymSet,
     TextMatch,
+    Timeline,
 )
 
 
@@ -170,8 +173,36 @@ class EnvironmentDraft:
 
 
 @dataclass(frozen=True)
+class TimelineDraft:
+    """Сырые значения таймлайна: заголовок + события (пары «дата → событие»)."""
+
+    title: str = ""
+    events: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class SesDraft:
+    """Сырые значения этапа «Оценка СЭС»: вступление, поиск, выбор уровня, документы."""
+
+    intro: str = ""
+    search: SearchDraft = SearchDraft()
+    level_choice: FieldDraft | None = None
+    documents: tuple[DocumentTaskDraft, ...] = ()
+
+
+@dataclass(frozen=True)
+class FinalDraft:
+    """Сырые значения этапа «Окончательный диагноз»: поиск, документы, таймлайны."""
+
+    intro: str = ""
+    search: SearchDraft = SearchDraft()
+    documents: tuple[DocumentTaskDraft, ...] = ()
+    timelines: tuple[TimelineDraft, ...] = ()
+
+
+@dataclass(frozen=True)
 class CaseDraft:
-    """Сырые значения кейса из UI (этот срез: мета + пациенты + этапы 2–4)."""
+    """Сырые значения кейса из UI (полный кейс: мета + пациенты + этапы 2–6)."""
 
     case_id: str
     title: str = ""
@@ -182,6 +213,8 @@ class CaseDraft:
     clinical: ClinicalDraft | None = None
     contacts: ContactsDraft | None = None
     environment: EnvironmentDraft | None = None
+    ses: SesDraft | None = None
+    final: FinalDraft | None = None
 
 
 def _build_search(draft: SearchDraft) -> KeywordSearch | None:
@@ -391,11 +424,57 @@ def build_environment(draft: EnvironmentDraft) -> StageEnvironment:
     )
 
 
+def _build_level(draft: FieldDraft | None) -> DocumentField | None:
+    """Собрать поле выбора уровня СЭС из ``FieldDraft`` (или ``None``, если он не задан).
+
+    Единичное поле с фиксированным id ``field-1``; правило сверки выбирает ``_build_field``.
+    """
+    if draft is None:
+        return None
+    return _build_field(draft, 1)
+
+
+def _build_timelines(drafts: tuple[TimelineDraft, ...]) -> tuple[Timeline, ...]:
+    """Собрать таймлайны из драфтов.
+
+    Таймлайны с пустым заголовком (после ``strip``) И нулём событий отбрасываются. Остальным
+    присваивается сквозной id ``tl-<i>`` от 1.
+    """
+    timelines: list[Timeline] = []
+    for tl in drafts:
+        if not tl.title.strip() and not tl.events:
+            continue
+        timelines.append(
+            Timeline(id=f"tl-{len(timelines) + 1}", title=tl.title, events=tl.events)
+        )
+    return tuple(timelines)
+
+
+def build_ses(draft: SesDraft) -> StageSes:
+    """Собрать этап «Оценка СЭС» из ``SesDraft``."""
+    return StageSes(
+        intro=draft.intro,
+        search=_build_search(draft.search),
+        level_choice=_build_level(draft.level_choice),
+        documents=_build_documents(draft.documents),
+    )
+
+
+def build_final(draft: FinalDraft) -> StageFinal:
+    """Собрать этап «Окончательный эпидемиологический диагноз» из ``FinalDraft``."""
+    return StageFinal(
+        intro=draft.intro,
+        search=_build_search(draft.search),
+        documents=_build_documents(draft.documents),
+        timelines=_build_timelines(draft.timelines),
+    )
+
+
 def build_case(draft: CaseDraft) -> Case:
     """Собрать доменный ``Case`` из ``CaseDraft``.
 
-    Валидируется только обязательный непустой идентификатор кейса. Этот срез трогает мету,
-    этап «Пациенты» и этапы 2–4; остальные этапы — дефолтные пустые. Чистая функция без I/O.
+    Валидируется только обязательный непустой идентификатор кейса. Этот срез собирает мету,
+    этап «Пациенты» и этапы 2–6. Чистая функция без I/O.
     """
     case_id = draft.case_id.strip()
     if not case_id:
@@ -430,12 +509,16 @@ def build_case(draft: CaseDraft) -> Case:
         if draft.environment is not None
         else StageEnvironment()
     )
+    ses = build_ses(draft.ses) if draft.ses is not None else StageSes()
+    final = build_final(draft.final) if draft.final is not None else StageFinal()
     return Case(
         meta=meta,
         patients=patients,
         clinical=clinical,
         contacts=contacts,
         environment=environment,
+        ses=ses,
+        final=final,
     )
 
 
@@ -449,14 +532,19 @@ __all__ = [
     "DocumentTaskDraft",
     "EnvironmentDraft",
     "FieldDraft",
+    "FinalDraft",
     "InspectionDraft",
     "PatientDraft",
     "SearchDraft",
     "SearchEntryDraft",
+    "SesDraft",
     "SynonymSetDraft",
     "TemplateDraft",
+    "TimelineDraft",
     "build_case",
     "build_clinical",
     "build_contacts",
     "build_environment",
+    "build_final",
+    "build_ses",
 ]
