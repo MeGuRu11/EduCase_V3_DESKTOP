@@ -10,9 +10,10 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -64,40 +65,39 @@ class CaseEditor(QWidget):
         patients_box_layout.addLayout(self._patients_layout)
 
         self.clinical_editor = ClinicalEditor(self)
-        clinical_box = QGroupBox("Клинико-эпидемиологический диагноз")
-        clinical_box_layout = QVBoxLayout(clinical_box)
-        clinical_box_layout.addWidget(self.clinical_editor)
-
         self.contacts_editor = ContactsEditor(self)
-        contacts_box = QGroupBox("Обследование контактных лиц")
-        contacts_box_layout = QVBoxLayout(contacts_box)
-        contacts_box_layout.addWidget(self.contacts_editor)
-
         self.environment_editor = EnvironmentEditor(self)
-        environment_box = QGroupBox("Обследование объектов внешней среды")
-        environment_box_layout = QVBoxLayout(environment_box)
-        environment_box_layout.addWidget(self.environment_editor)
-
         self.ses_editor = SesEditor(self)
-        ses_box = QGroupBox("Оценка СЭС")
-        ses_box_layout = QVBoxLayout(ses_box)
-        ses_box_layout.addWidget(self.ses_editor)
-
         self.final_editor = FinalEditor(self)
-        final_box = QGroupBox("Окончательный эпидемиологический диагноз")
-        final_box_layout = QVBoxLayout(final_box)
-        final_box_layout.addWidget(self.final_editor)
+
+        # Вкладка «Кейс и пациенты»: мета-форма + блок пациентов.
+        case_tab = QWidget()
+        case_tab_layout = QVBoxLayout(case_tab)
+        case_tab_layout.addLayout(meta_form)
+        case_tab_layout.addWidget(patients_box)
+        case_tab_layout.addStretch(1)
+
+        self.tabs = QTabWidget(self)
+        self.tabs.addTab(self._scroll_tab(case_tab), "Кейс и пациенты")
+        self.tabs.addTab(self._scroll_tab(self.clinical_editor), "Клинический")
+        self.tabs.addTab(self._scroll_tab(self.contacts_editor), "Контакты")
+        self.tabs.addTab(self._scroll_tab(self.environment_editor), "Среда")
+        self.tabs.addTab(self._scroll_tab(self.ses_editor), "СЭС")
+        self.tabs.addTab(self._scroll_tab(self.final_editor), "Финал")
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Кейс"))
-        layout.addLayout(meta_form)
-        layout.addWidget(patients_box)
-        layout.addWidget(clinical_box)
-        layout.addWidget(contacts_box)
-        layout.addWidget(environment_box)
-        layout.addWidget(ses_box)
-        layout.addWidget(final_box)
-        layout.addStretch(1)
+        layout.addWidget(self.tabs)
+
+    def _scroll_tab(self, content: QWidget) -> QScrollArea:
+        """Обернуть содержимое вкладки в прокручиваемую область.
+
+        ``setWidgetResizable(True)`` растягивает контент по ширине области и даёт
+        вертикальную прокрутку высоким редакторам вместо их сжатия.
+        """
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(content)
+        return scroll
 
     def add_patient(self) -> None:
         """Добавить редактор нового пациента в конец списка."""

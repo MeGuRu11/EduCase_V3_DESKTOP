@@ -1,10 +1,39 @@
 """Тесты CaseEditor: сборка ``CaseDraft`` из меты и редакторов пациентов."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QTableWidgetItem
+from PySide6.QtWidgets import QTableWidgetItem, QTabWidget
 from pytestqt.qtbot import QtBot
 
 from educase_constructor.ui.case_editor import CaseEditor
+from educase_constructor.ui.patient_editor import PatientEditor
+
+
+def test_editor_has_six_titled_tabs(qtbot: QtBot) -> None:
+    """Компоновка: шесть вкладок в ожидаемом порядке внутри ``self.tabs``."""
+    editor = CaseEditor()
+    qtbot.addWidget(editor)
+
+    assert isinstance(editor.tabs, QTabWidget)
+    assert editor.tabs.count() == 6
+    titles = [editor.tabs.tabText(i) for i in range(editor.tabs.count())]
+    assert titles == [
+        "Кейс и пациенты",
+        "Клинический",
+        "Контакты",
+        "Среда",
+        "СЭС",
+        "Финал",
+    ]
+
+
+def test_add_patient_still_appends_patient_editor(qtbot: QtBot) -> None:
+    """После переверстки add_patient по-прежнему кладёт ``PatientEditor`` в список."""
+    editor = CaseEditor()
+    qtbot.addWidget(editor)
+
+    editor.add_patient()
+    assert len(editor.patient_editors) == 1
+    assert isinstance(editor.patient_editors[0], PatientEditor)
 
 
 def test_empty_editor_to_draft_carries_id(qtbot: QtBot) -> None:
