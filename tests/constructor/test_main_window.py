@@ -5,8 +5,11 @@ from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 from pytestqt.qtbot import QtBot
 
 from educase_constructor.ui.main_window import MainWindow
+from educase_constructor.ui.report_dialog import ReportDialog
 from educase_core.application.case_builder import build_case
-from educase_core.application.cases import load_case
+from educase_core.application.cases import load_case, save_case
+from educase_core.application.results import record_attempt
+from educase_core.domain import Attempt, AttemptMeta, Case, CaseMeta
 
 
 def test_constructor_window_title(qtbot: QtBot) -> None:
@@ -145,3 +148,34 @@ def test_save_invalid_template_number_warns_and_skips(
     dst = tmp_path / "case.educase"
     assert window.save_case_to_path(dst) is False
     assert not dst.exists()
+
+
+def test_report_dialog_for_valid_pair_returns_dialog(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Шов отчёта на валидной паре .eduresult/.educase → ``ReportDialog`` (не None)."""
+    case_path = save_case(Case(meta=CaseMeta(id="case-x")), tmp_path / "case")
+    result_path = record_attempt(
+        Attempt(meta=AttemptMeta(case_id="case-x", trainee_label="Петров")),
+        tmp_path / "result",
+    )
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    dialog = window.report_dialog_for(result_path, case_path)
+    assert dialog is not None
+    assert isinstance(dialog, ReportDialog)
+    qtbot.addWidget(dialog)
+
+
+def test_report_dialog_for_broken_archive_returns_none(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Шов отчёта на чужом типе архива (.educase как результат) → ``None`` (не падение)."""
+    case_path = save_case(Case(meta=CaseMeta(id="case-x")), tmp_path / "case")
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.report_dialog_for(case_path, case_path) is None
