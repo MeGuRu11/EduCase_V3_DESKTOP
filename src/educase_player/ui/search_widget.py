@@ -24,6 +24,7 @@ class SearchWidget(QWidget):
         super().__init__(parent)
         self._search = search
         self._last_entry: SearchEntry | None = None
+        self._queries: list[str] = []
 
         layout = QVBoxLayout(self)
 
@@ -51,6 +52,10 @@ class SearchWidget(QWidget):
         """Последний найденный SearchEntry; None если запрос пустой или не найден."""
         return self._last_entry
 
+    def queries(self) -> tuple[str, ...]:
+        """Накопленные непустые запросы в порядке ввода (для SearchLog прохождения)."""
+        return tuple(self._queries)
+
     def on_search(self) -> None:
         """Выполнить поиск по тексту поля ввода."""
         q = self.input.text()
@@ -58,6 +63,7 @@ class SearchWidget(QWidget):
             self.result.setText("Введите запрос")
             self._last_entry = None
             return
+        self._queries.append(q.strip())
         entry = self._search.find(q)
         if entry is None:
             self.result.setText("Ничего не найдено")

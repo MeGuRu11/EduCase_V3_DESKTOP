@@ -1,5 +1,14 @@
-"""Фабрика виджетов этапов: индивидуальная сборка по типу этапа (ADR-004)."""
+"""Типизированные виды этапов: индивидуальная сборка + сбор сырого ответа (ADR-004/008).
+
+Каждый этап — свой ``StageView``-подкласс: строит тот же прокручиваемый контент, что и
+раньше, но СОХРАНЯЕТ пары «конфиг-элемент → виджет», чтобы собрать слот ответа ``Attempt``.
+``to_response`` копит СЫРЫЕ данные курсанта (queries/выбранные id/тексты) без сверки — оценка
+живёт в ``domain.report`` (ADR-008). Read-only элементы (карточки пациентов, таймлайны,
+заглушки схем/фото) в ответ не входят.
+"""
 from __future__ import annotations
+
+from typing import assert_never
 
 from PySide6.QtWidgets import (
     QLabel,
@@ -8,7 +17,23 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_core.domain.attempt import (
+    AttemptClinical,
+    AttemptContacts,
+    AttemptEnvironment,
+    AttemptFinal,
+    AttemptPatients,
+    AttemptSes,
+    AttemptStage,
+    BranchResponse,
+    ChoiceResponse,
+    DocumentResponse,
+    InspectionResponse,
+    SearchLog,
+)
+from educase_core.domain.documents import DocumentField, DocumentTask
 from educase_core.domain.stages import (
+    BranchPoint,
     Stage,
     StageClinical,
     StageContacts,
@@ -26,103 +51,287 @@ from educase_player.ui.search_widget import SearchWidget
 from educase_player.ui.timeline_widget import TimelineWidget
 
 
-def build_stage_view(stage: Stage) -> QWidget:
-    """Создать прокручиваемый виджет для этапа по его типу (шесть фиксированных, ADR-004)."""
-    container = QWidget()
-    outer = QVBoxLayout(container)
-    outer.setContentsMargins(0, 0, 0, 0)
+class StageView(QWidget):
+    """Базовый прокручиваемый вид этапа: общий каркас + сбор сырого ответа.
 
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    outer.addWidget(scroll)
+    Каркас (прокрутка, заголовок, intro) строится здесь; содержимое — в подклассе,
+    который добавляет виджеты в ``self._layout`` и сохраняет ссылки для ``to_response``.
+    Навигация не блокируется ответами (ADR-005/008).
+    """
 
-    inner = QWidget()
-    layout = QVBoxLayout(inner)
-    scroll.setWidget(inner)
+    def __init__(self, stage: Stage, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
 
-    title_label = QLabel(stage.title)
-    layout.addWidget(title_label)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
 
-    if stage.intro:
-        intro_label = QLabel(stage.intro)
-        intro_label.setWordWrap(True)
-        layout.addWidget(intro_label)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        outer.addWidget(scroll)
 
-    has_content = False
+        inner = QWidget()
+        self._layout = QVBoxLayout(inner)
+        scroll.setWidget(inner)
 
-    if isinstance(stage, StagePatients):
+        self._layout.addWidget(QLabel(stage.title))
+
+        if stage.intro:
+            intro_label = QLabel(stage.intro)
+            intro_label.setWordWrap(True)
+            self._layout.addWidget(intro_label)
+
+    def _finish(self, has_content: bool) -> None:
+        """Дозаполнить каркас: заглушка пустого этапа + растяжка снизу."""
+        if not has_content:
+            self._layout.addWidget(QLabel("Нет заданий на этом этапе"))
+        self._layout.addStretch()
+
+    def to_response(self) -> AttemptStage:
+        """Собрать слот ответа этапа из накопленных виджетов (сырые данные, ADR-008)."""
+        raise NotImplementedError
+
+
+class PatientsStageView(StageView):
+    """Этап 1 «Пациенты»: контекстный поиск + read-only карточки пациентов."""
+
+    def __init__(self, stage: StagePatients, parent: QWidget | None = None) -> None:
+        super().__init__(stage, parent)
+        self._search: SearchWidget | None = None
+
+        has_content = False
         if stage.search is not None and stage.search.entries:
-            layout.addWidget(SearchWidget(stage.search))
+            self._search = SearchWidget(stage.search)
+            self._layout.addWidget(self._search)
             has_content = True
         for card in stage.patients:
-            layout.addWidget(PatientCardWidget(card))
+            self._layout.addWidget(PatientCardWidget(card))
             has_content = True
+        self._finish(has_content)
 
-    elif isinstance(stage, StageClinical):
+    def to_response(self) -> AttemptPatients:
+        return AttemptPatients(search=_search_log(self._search))
+
+
+class ClinicalStageView(StageView):
+    """Этап 2 «Клинико-эпидемиологический диагноз»: поиск, ветвление, документы."""
+
+    def __init__(self, stage: StageClinical, parent: QWidget | None = None) -> None:
+        super().__init__(stage, parent)
+        self._search: SearchWidget | None = None
+        self._branch: tuple[BranchPoint, BranchWidget] | None = None
+        self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
+
+        has_content = False
         if stage.search is not None and stage.search.entries:
-            layout.addWidget(SearchWidget(stage.search))
+            self._search = SearchWidget(stage.search)
+            self._layout.addWidget(self._search)
             has_content = True
         if stage.branch is not None:
-            layout.addWidget(BranchWidget(stage.branch))
+            branch_widget = BranchWidget(stage.branch)
+            self._branch = (stage.branch, branch_widget)
+            self._layout.addWidget(branch_widget)
             has_content = True
         for task in stage.documents:
-            layout.addWidget(DocumentWidget(task))
+            doc_widget = DocumentWidget(task)
+            self._docs.append((task, doc_widget))
+            self._layout.addWidget(doc_widget)
             has_content = True
+        self._finish(has_content)
 
-    elif isinstance(stage, StageContacts):
+    def to_response(self) -> AttemptClinical:
+        return AttemptClinical(
+            search=_search_log(self._search),
+            branch=_branch_resp(self._branch),
+            documents=tuple(_doc_resp(task, widget) for task, widget in self._docs),
+        )
+
+
+class ContactsStageView(StageView):
+    """Этап 3 «Обследование контактных лиц»: заглушка схемы + свободный осмотр."""
+
+    def __init__(self, stage: StageContacts, parent: QWidget | None = None) -> None:
+        super().__init__(stage, parent)
+        self._inspection: InspectionWidget | None = None
+
+        has_content = False
         if stage.scheme is not None:
             stub = QLabel(f"Схема: {stage.scheme}")  # TODO ADR-012
             stub.setEnabled(False)
-            layout.addWidget(stub)
+            self._layout.addWidget(stub)
             has_content = True
         if stage.inspection is not None:
-            layout.addWidget(InspectionWidget(stage.inspection))
+            self._inspection = InspectionWidget(stage.inspection)
+            self._layout.addWidget(self._inspection)
             has_content = True
+        self._finish(has_content)
 
-    elif isinstance(stage, StageEnvironment):
+    def to_response(self) -> AttemptContacts:
+        return AttemptContacts(inspection=_insp_resp(self._inspection))
+
+
+class EnvironmentStageView(StageView):
+    """Этап 4 «Объекты внешней среды»: заглушки схемы/фото, документы, осмотр."""
+
+    def __init__(self, stage: StageEnvironment, parent: QWidget | None = None) -> None:
+        super().__init__(stage, parent)
+        self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
+        self._inspection: InspectionWidget | None = None
+
+        has_content = False
         if stage.scheme is not None:
             stub = QLabel(f"Схема: {stage.scheme}")  # TODO ADR-012
             stub.setEnabled(False)
-            layout.addWidget(stub)
+            self._layout.addWidget(stub)
             has_content = True
         if stage.photos:
             photo_ids = ", ".join(stage.photos)
             photos_stub = QLabel(f"Фото: {photo_ids}")  # TODO ADR-012
             photos_stub.setEnabled(False)
-            layout.addWidget(photos_stub)
+            self._layout.addWidget(photos_stub)
             has_content = True
         for task in stage.documents:
-            layout.addWidget(DocumentWidget(task))
+            doc_widget = DocumentWidget(task)
+            self._docs.append((task, doc_widget))
+            self._layout.addWidget(doc_widget)
             has_content = True
         if stage.inspection is not None:
-            layout.addWidget(InspectionWidget(stage.inspection))
+            self._inspection = InspectionWidget(stage.inspection)
+            self._layout.addWidget(self._inspection)
             has_content = True
+        self._finish(has_content)
 
-    elif isinstance(stage, StageSes):
+    def to_response(self) -> AttemptEnvironment:
+        return AttemptEnvironment(
+            documents=tuple(_doc_resp(task, widget) for task, widget in self._docs),
+            inspection=_insp_resp(self._inspection),
+        )
+
+
+class SesStageView(StageView):
+    """Этап 5 «Оценка СЭС»: поиск, выбор уровня СЭС, документы."""
+
+    def __init__(self, stage: StageSes, parent: QWidget | None = None) -> None:
+        super().__init__(stage, parent)
+        self._search: SearchWidget | None = None
+        self._level: tuple[DocumentField, DocumentFieldWidget] | None = None
+        self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
+
+        has_content = False
         if stage.search is not None and stage.search.entries:
-            layout.addWidget(SearchWidget(stage.search))
+            self._search = SearchWidget(stage.search)
+            self._layout.addWidget(self._search)
             has_content = True
         if stage.level_choice is not None:
-            layout.addWidget(DocumentFieldWidget(stage.level_choice))
+            level_widget = DocumentFieldWidget(stage.level_choice)
+            self._level = (stage.level_choice, level_widget)
+            self._layout.addWidget(level_widget)
             has_content = True
         for task in stage.documents:
-            layout.addWidget(DocumentWidget(task))
+            doc_widget = DocumentWidget(task)
+            self._docs.append((task, doc_widget))
+            self._layout.addWidget(doc_widget)
             has_content = True
+        self._finish(has_content)
 
-    elif isinstance(stage, StageFinal):
+    def to_response(self) -> AttemptSes:
+        return AttemptSes(
+            search=_search_log(self._search),
+            level_choice=_choice_resp(self._level),
+            documents=tuple(_doc_resp(task, widget) for task, widget in self._docs),
+        )
+
+
+class FinalStageView(StageView):
+    """Этап 6 «Окончательный диагноз»: поиск, документы, read-only таймлайны."""
+
+    def __init__(self, stage: StageFinal, parent: QWidget | None = None) -> None:
+        super().__init__(stage, parent)
+        self._search: SearchWidget | None = None
+        self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
+
+        has_content = False
         if stage.search is not None and stage.search.entries:
-            layout.addWidget(SearchWidget(stage.search))
+            self._search = SearchWidget(stage.search)
+            self._layout.addWidget(self._search)
             has_content = True
         for task in stage.documents:
-            layout.addWidget(DocumentWidget(task))
+            doc_widget = DocumentWidget(task)
+            self._docs.append((task, doc_widget))
+            self._layout.addWidget(doc_widget)
             has_content = True
         for tl in stage.timelines:
-            layout.addWidget(TimelineWidget(tl))
+            self._layout.addWidget(TimelineWidget(tl))
             has_content = True
+        self._finish(has_content)
 
-    if not has_content:
-        layout.addWidget(QLabel("Нет заданий на этом этапе"))
+    def to_response(self) -> AttemptFinal:
+        return AttemptFinal(
+            search=_search_log(self._search),
+            documents=tuple(_doc_resp(task, widget) for task, widget in self._docs),
+        )
 
-    layout.addStretch()
 
-    return container
+# --- Приватные хелперы сборки ответа (id берём из конфиг-элемента, не из виджета) ---
+
+
+def _search_log(widget: SearchWidget | None) -> SearchLog:
+    """Журнал поиска из накопленных запросов виджета; пустой если поиска не было."""
+    return SearchLog(queries=widget.queries()) if widget is not None else SearchLog()
+
+
+def _branch_resp(pair: tuple[BranchPoint, BranchWidget] | None) -> BranchResponse | None:
+    """Ответ ветвления: id точки из конфига + id выбранной опции («» если не выбрана)."""
+    if pair is None:
+        return None
+    branch, widget = pair
+    option = widget.selected_option()
+    return BranchResponse(
+        point_id=branch.id,
+        chosen_option_id=option.id if option is not None else "",
+    )
+
+
+def _doc_resp(task: DocumentTask, widget: DocumentWidget) -> DocumentResponse:
+    """Ответ задания-документа: id задания + выбранная опция + сырые пары «поле → ответ»."""
+    option = widget.selected_option()
+    return DocumentResponse(
+        task_id=task.id,
+        chosen_option_id=option.id if option is not None else "",
+        field_answers=tuple(
+            (fw.field.id, fw.answer()) for fw in widget.current_field_widgets()
+        ),
+    )
+
+
+def _insp_resp(widget: InspectionWidget | None) -> InspectionResponse | None:
+    """Ответ осмотра: сырой текст вывода; None если осмотра на этапе нет."""
+    if widget is None:
+        return None
+    return InspectionResponse(text=widget.text())
+
+
+def _choice_resp(
+    pair: tuple[DocumentField, DocumentFieldWidget] | None,
+) -> ChoiceResponse | None:
+    """Сырой ответ-выбор (уровень СЭС); None если выбора на этапе нет."""
+    if pair is None:
+        return None
+    _, widget = pair
+    return ChoiceResponse(answer=widget.answer())
+
+
+def build_stage_view(stage: Stage) -> StageView:
+    """Создать типизированный вид по типу этапа (шесть фиксированных, ADR-004)."""
+    if isinstance(stage, StagePatients):
+        return PatientsStageView(stage)
+    if isinstance(stage, StageClinical):
+        return ClinicalStageView(stage)
+    if isinstance(stage, StageContacts):
+        return ContactsStageView(stage)
+    if isinstance(stage, StageEnvironment):
+        return EnvironmentStageView(stage)
+    if isinstance(stage, StageSes):
+        return SesStageView(stage)
+    if isinstance(stage, StageFinal):
+        return FinalStageView(stage)
+    assert_never(stage)

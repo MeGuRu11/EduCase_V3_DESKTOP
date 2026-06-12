@@ -56,6 +56,10 @@ class InspectionWidget(QWidget):
         """Результат последнего on_submit; None до нажатия «Сохранить»."""
         return self._result
 
+    def text(self) -> str:
+        """Текущий текст вывода осмотра (сырой, без сверки)."""
+        return self.output.toPlainText()
+
     def on_submit(self) -> None:
         """Сохранить результат; вердикт не показывать (ADR-005/ADR-008)."""
         text = self.output.toPlainText()

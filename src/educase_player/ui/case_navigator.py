@@ -10,8 +10,27 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_core.domain.attempt import (
+    Attempt,
+    AttemptClinical,
+    AttemptContacts,
+    AttemptEnvironment,
+    AttemptFinal,
+    AttemptMeta,
+    AttemptPatients,
+    AttemptSes,
+)
 from educase_core.domain.case import Case
-from educase_player.ui.stage_views import build_stage_view
+from educase_player.ui.stage_views import (
+    ClinicalStageView,
+    ContactsStageView,
+    EnvironmentStageView,
+    FinalStageView,
+    PatientsStageView,
+    SesStageView,
+    StageView,
+    build_stage_view,
+)
 
 
 class CaseNavigator(QWidget):
@@ -33,8 +52,10 @@ class CaseNavigator(QWidget):
         layout.addWidget(self._position_label)
 
         self.stack = QStackedWidget()
-        for stage in stages:
-            self.stack.addWidget(build_stage_view(stage))
+        views = tuple(build_stage_view(stage) for stage in stages)
+        self._views: tuple[StageView, ...] = views
+        for view in views:
+            self.stack.addWidget(view)
         layout.addWidget(self.stack, 1)
 
         nav_layout = QHBoxLayout()
@@ -54,6 +75,43 @@ class CaseNavigator(QWidget):
     def current_index(self) -> int:
         """Текущий индекс активного этапа (0-based)."""
         return self.stack.currentIndex()
+
+    def collect_attempt(self, meta: AttemptMeta) -> Attempt:
+        """Собрать прохождение из накопленных видов этапов (сырые ответы, ADR-008).
+
+        Каждый вид даёт свой слот ответа; ``meta`` (с ``case_id``) приходит снаружи.
+        Слоты отсутствующих видов заполняются дефолтными пустыми ответами.
+        """
+        patients: AttemptPatients | None = None
+        clinical: AttemptClinical | None = None
+        contacts: AttemptContacts | None = None
+        environment: AttemptEnvironment | None = None
+        ses: AttemptSes | None = None
+        final: AttemptFinal | None = None
+
+        for view in self._views:
+            if isinstance(view, PatientsStageView):
+                patients = view.to_response()
+            elif isinstance(view, ClinicalStageView):
+                clinical = view.to_response()
+            elif isinstance(view, ContactsStageView):
+                contacts = view.to_response()
+            elif isinstance(view, EnvironmentStageView):
+                environment = view.to_response()
+            elif isinstance(view, SesStageView):
+                ses = view.to_response()
+            elif isinstance(view, FinalStageView):
+                final = view.to_response()
+
+        return Attempt(
+            meta=meta,
+            patients=patients or AttemptPatients(),
+            clinical=clinical or AttemptClinical(),
+            contacts=contacts or AttemptContacts(),
+            environment=environment or AttemptEnvironment(),
+            ses=ses or AttemptSes(),
+            final=final or AttemptFinal(),
+        )
 
     def _refresh(self) -> None:
         idx = self.stack.currentIndex()

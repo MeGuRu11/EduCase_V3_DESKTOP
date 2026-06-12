@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
 from educase_core.application.cases import save_case
+from educase_core.application.results import load_result
 from educase_core.domain.case import Case, CaseMeta
 from educase_player.ui.case_navigator import CaseNavigator
 from educase_player.ui.main_window import MainWindow
@@ -49,3 +50,43 @@ def test_load_case_from_path_corrupt(
 
     result = window.load_case_from_path(corrupt)
     assert result is False
+
+
+def test_save_action_disabled_until_case_loaded(qtbot: QtBot, tmp_path: Path) -> None:
+    """Пункт «Сохранить результат…» выключен до загрузки кейса и включается после."""
+    case = Case(meta=CaseMeta("c1", "Тест"))
+    dst = tmp_path / "test.educase"
+    save_case(case, dst)
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    assert not window._save_action.isEnabled()
+
+    assert window.load_case_from_path(dst) is True
+    assert window._save_action.isEnabled()
+
+
+def test_save_result_without_case_returns_false(qtbot: QtBot, tmp_path: Path) -> None:
+    """save_result_to_path без загруженного кейса возвращает False, без записи."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.save_result_to_path(tmp_path / "res.eduresult") is False
+
+
+def test_load_then_save_result_round_trip(qtbot: QtBot, tmp_path: Path) -> None:
+    """Шов: load_case_from_path → save_result_to_path → файл читается load_result."""
+    case = Case(meta=CaseMeta("c1", "Тест"))
+    src = tmp_path / "test.educase"
+    save_case(case, src)
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    assert window.load_case_from_path(src) is True
+
+    out = tmp_path / "result.eduresult"
+    assert window.save_result_to_path(out, "Курсант Иванов") is True
+
+    loaded = load_result(out)
+    assert loaded.attempt.meta.case_id == "c1"
+    assert loaded.attempt.meta.trainee_label == "Курсант Иванов"
