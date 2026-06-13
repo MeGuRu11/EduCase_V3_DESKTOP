@@ -60,7 +60,7 @@ class PatientDraft:
     id: str
     title: str
     fields: tuple[tuple[str, str], ...] = ()
-    assets: tuple[str, ...] = ()
+    assets: tuple[AssetRef, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,7 @@ class SearchEntryDraft:
 
     triggers: SynonymSetDraft
     reveal_text: str = ""
-    reveal_assets: tuple[str, ...] = ()
+    reveal_assets: tuple[AssetRef, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -181,7 +181,7 @@ class EnvironmentDraft:
 
     intro: str = ""
     scheme: AssetRef | None = None
-    photos: tuple[str, ...] = ()
+    photos: tuple[AssetRef, ...] = ()
     documents: tuple[DocumentTaskDraft, ...] = ()
     inspection: InspectionDraft = InspectionDraft()
 
@@ -250,7 +250,7 @@ def _build_search(draft: SearchDraft) -> KeywordSearch | None:
                     synonyms=entry.triggers.synonyms,
                 ),
                 reveal_text=entry.reveal_text,
-                reveal_assets=entry.reveal_assets,
+                reveal_assets=tuple(ref.asset_id for ref in entry.reveal_assets),
             )
         )
     if not entries and not draft.optional:
@@ -462,7 +462,7 @@ def build_contacts(draft: ContactsDraft) -> StageContacts:
 
 def build_environment(draft: EnvironmentDraft) -> StageEnvironment:
     """Собрать этап «Обследование объектов внешней среды» из ``EnvironmentDraft``."""
-    photos = tuple(p.strip() for p in draft.photos if p.strip())
+    photos = tuple(ref.asset_id for ref in draft.photos)
     return StageEnvironment(
         intro=draft.intro,
         scheme=draft.scheme.asset_id if draft.scheme is not None else None,
@@ -540,7 +540,12 @@ def build_case(draft: CaseDraft) -> Case:
     )
     patients = StagePatients(
         patients=tuple(
-            PatientCard(id=p.id, title=p.title, fields=p.fields, assets=p.assets)
+            PatientCard(
+                id=p.id,
+                title=p.title,
+                fields=p.fields,
+                assets=tuple(ref.asset_id for ref in p.assets),
+            )
             for p in draft.patients
         )
     )

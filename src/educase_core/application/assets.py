@@ -1,37 +1,55 @@
 """Сбор байтов ассетов кейса из исходных файлов (слой приложения).
 
 Единственное место чтения файлов в цепочке сборки кейса: ``build_case`` и ``build_*`` —
-чистые функции без I/O, поэтому чтение байтов ассетов вынесено сюда. Обход драфта собирает
-все ``AssetRef`` и читает их исходные файлы по ``source_path``. В этом срезе ассеты несут
-только схемы этапов 3 и 4 (``contacts.scheme`` / ``environment.scheme``).
+чистые функции без I/O, поэтому чтение байтов ассетов вынесено сюда. Обход охватывает ВЕСЬ
+драфт: ассеты карточек пациентов, схему и фото этапа «Среда», схему этапа «Контакты» и
+изображения вскрытия всех точек поиска (клинический, СЭС, финал).
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 from educase_core.application.case_builder import AssetRef, CaseDraft
 
 
-def _collect_asset_refs(draft: CaseDraft) -> list[AssetRef]:
-    """Собрать все ``AssetRef`` драфта (в этом срезе — схемы этапов 3 и 4, если заданы)."""
-    refs: list[AssetRef] = []
+def _iter_asset_refs(draft: CaseDraft) -> Iterator[AssetRef]:
+    """Выдать все ``AssetRef`` драфта по всем местам ассетов кейса.
+
+    Источники: ассеты карточек пациентов; схема этапа «Контакты»; схема и фото этапа «Среда»;
+    изображения вскрытия точек поиска этапов с поиском (клинический, СЭС, финал). Этапы и схемы
+    со значением ``None`` пропускаются. Точки поиска с пустым каноническим триггером
+    пропускаются ТОЧНО как в ``_build_search`` (case_builder): их домен-запись не создаётся,
+    поэтому и байты их ассетов в архив не пакуются (иначе вышли бы недостижимые orphan-блобы).
+    """
+    for patient in draft.patients:
+        yield from patient.assets
     if draft.contacts is not None and draft.contacts.scheme is not None:
-        refs.append(draft.contacts.scheme)
-    if draft.environment is not None and draft.environment.scheme is not None:
-        refs.append(draft.environment.scheme)
-    return refs
+        yield draft.contacts.scheme
+    if draft.environment is not None:
+        if draft.environment.scheme is not None:
+            yield draft.environment.scheme
+        yield from draft.environment.photos
+    for stage in (draft.clinical, draft.ses, draft.final):
+        if stage is None:
+            continue
+        for entry in stage.search.entries:
+            if not entry.triggers.canonical.strip():
+                continue
+            yield from entry.reveal_assets
 
 
 def read_asset_sources(draft: CaseDraft) -> dict[str, bytes]:
     """Прочитать байты исходных файлов всех ассетов драфта в ``{asset_id: bytes}``.
 
-    Обходит драфт, для каждого ``AssetRef`` читает ``Path(ref.source_path).read_bytes()``.
-    ``OSError`` (нет файла/нет доступа) пробрасывается наверх — обработает окно. Если ассетов
-    нет — пустой словарь.
+    Обходит весь драфт (``_iter_asset_refs``), для каждого ``AssetRef`` читает
+    ``Path(ref.source_path).read_bytes()``. Словарь по ``asset_id`` естественно дедуплицирует
+    повторные ссылки. ``OSError`` (нет файла/нет доступа) пробрасывается наверх — обработает
+    окно. Если ассетов нет — пустой словарь.
     """
     return {
         ref.asset_id: Path(ref.source_path).read_bytes()
-        for ref in _collect_asset_refs(draft)
+        for ref in _iter_asset_refs(draft)
     }
 
 

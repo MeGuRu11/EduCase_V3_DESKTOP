@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.asset_picker import AssetListPicker
 from educase_constructor.ui.synonym_editor import SynonymSetEditor
 from educase_core.application.case_builder import SearchDraft, SearchEntryDraft
 
@@ -29,26 +30,22 @@ class SearchEntryEditor(QWidget):
 
         self.triggers = SynonymSetEditor(self)
         self.reveal_text_edit = QLineEdit(self)
-        self.reveal_assets_edit = QLineEdit(self)
+        self.reveal_assets_picker = AssetListPicker(self)
 
         form = QFormLayout()
         form.addRow("Вскрываемый текст", self.reveal_text_edit)
-        form.addRow("Ассеты (id через запятую)", self.reveal_assets_edit)
+        form.addRow("Изображения точки", self.reveal_assets_picker)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.triggers)
         layout.addLayout(form)
-
-    def _collect_reveal_assets(self) -> tuple[str, ...]:
-        parts = (chunk.strip() for chunk in self.reveal_assets_edit.text().split(","))
-        return tuple(part for part in parts if part)
 
     def to_draft(self) -> SearchEntryDraft:
         """Собрать ``SearchEntryDraft`` из текущих значений виджетов."""
         return SearchEntryDraft(
             triggers=self.triggers.to_draft(),
             reveal_text=self.reveal_text_edit.text(),
-            reveal_assets=self._collect_reveal_assets(),
+            reveal_assets=self.reveal_assets_picker.value(),
         )
 
 

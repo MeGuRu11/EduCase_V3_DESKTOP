@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from educase_constructor.ui.asset_picker import AssetPicker
+from educase_constructor.ui.asset_picker import AssetListPicker, AssetPicker
 from educase_constructor.ui.document_editor import DocumentListEditor
 from educase_constructor.ui.inspection_editor import InspectionEditor
 from educase_core.application.case_builder import EnvironmentDraft
@@ -29,14 +29,14 @@ class EnvironmentEditor(QWidget):
 
         self.intro_edit = QLineEdit(self)
         self.scheme_picker = AssetPicker(self)
-        self.photos_edit = QLineEdit(self)
+        self.photos_picker = AssetListPicker(self)
         self.documents_editor = DocumentListEditor(self)
         self.inspection_editor = InspectionEditor(self)
 
         form = QFormLayout()
         form.addRow("Вступление", self.intro_edit)
         form.addRow("Схема (изображение)", self.scheme_picker)
-        form.addRow("Фото (id через запятую)", self.photos_edit)
+        form.addRow("Фото (изображения)", self.photos_picker)
 
         documents_box = QGroupBox("Документы")
         documents_box_layout = QVBoxLayout(documents_box)
@@ -51,16 +51,12 @@ class EnvironmentEditor(QWidget):
         layout.addWidget(documents_box)
         layout.addWidget(inspection_box)
 
-    def _collect_photos(self) -> tuple[str, ...]:
-        parts = (chunk.strip() for chunk in self.photos_edit.text().split(","))
-        return tuple(part for part in parts if part)
-
     def to_draft(self) -> EnvironmentDraft:
         """Собрать ``EnvironmentDraft`` из вступления, схемы, фото, документов и осмотра."""
         return EnvironmentDraft(
             intro=self.intro_edit.text(),
             scheme=self.scheme_picker.value(),
-            photos=self._collect_photos(),
+            photos=self.photos_picker.value(),
             documents=self.documents_editor.to_draft(),
             inspection=self.inspection_editor.to_draft(),
         )

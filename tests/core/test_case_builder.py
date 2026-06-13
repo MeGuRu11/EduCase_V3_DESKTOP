@@ -54,7 +54,11 @@ def test_build_case_with_meta_and_patients() -> None:
         unit_personnel=150,
         patients=(
             PatientDraft(id="p1", title="Пациент 1", fields=(("Возраст", "25"),)),
-            PatientDraft(id="p2", title="Пациент 2", assets=("img_01",)),
+            PatientDraft(
+                id="p2",
+                title="Пациент 2",
+                assets=(AssetRef("img_01", "/tmp/p2.png", "p2.png"),),
+            ),
         ),
     )
     case = build_case(draft)
@@ -104,7 +108,7 @@ def _clinical_draft() -> ClinicalDraft:
                         synonyms=("лихорадка",),
                     ),
                     reveal_text="38,5 °C",
-                    reveal_assets=("img_temp",),
+                    reveal_assets=(AssetRef("img_temp", "/tmp/temp.png", "temp.png"),),
                 ),
             ),
         ),
@@ -409,11 +413,14 @@ def test_build_case_contacts_blank_scheme_and_empty_inspection_are_none() -> Non
 
 
 def test_build_case_environment_photos_documents_inspection() -> None:
-    """``environment`` → схема, отфильтрованные фото, документы и осмотр как заданы."""
+    """``environment`` → схема, фото (asset_id каждого ``AssetRef`` дословно), документы, осмотр."""
     environment = EnvironmentDraft(
         intro="Обследуйте пищеблок",
         scheme=AssetRef("scheme_env", "/tmp/env.png", "env.png"),
-        photos=("img_01", "  img_02  ", "   "),  # пустые/пробельные отбрасываются
+        photos=(
+            AssetRef("img_01", "/tmp/img_01.png", "img_01.png"),
+            AssetRef("img_02", "/tmp/img_02.png", "img_02.png"),
+        ),
         documents=(
             DocumentTaskDraft(
                 prompt="Выберите акт",
@@ -454,7 +461,7 @@ def test_build_case_contacts_environment_round_trip_to_dict() -> None:
     )
     environment = EnvironmentDraft(
         scheme=AssetRef("scheme_env", "/tmp/env.png", "env.png"),
-        photos=("img_01",),
+        photos=(AssetRef("img_01", "/tmp/img_01.png", "img_01.png"),),
         inspection=InspectionDraft(groups=(SynonymSetDraft(canonical="грязь"),)),
     )
     case = build_case(

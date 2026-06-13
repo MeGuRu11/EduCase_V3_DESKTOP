@@ -90,9 +90,11 @@ def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
     # 4 — Объекты внешней среды.
     env_scheme = tmp_path / "scheme_env.png"
     env_scheme.write_bytes(b"ENV")
+    env_photo = tmp_path / "photo_01.png"
+    env_photo.write_bytes(b"PHOTO")
     environment = editor.environment_editor
     environment.scheme_picker.set_file(str(env_scheme))
-    environment.photos_edit.setText("img_01")
+    environment.photos_picker.add_file(str(env_photo))
     environment.inspection_editor.add_group_button.click()
     environment.inspection_editor.group_editors[0].canonical_edit.setText("грязь")
 
@@ -160,6 +162,56 @@ def test_save_packs_scheme_asset_bytes(qtbot: QtBot, tmp_path: Path) -> None:
     # …а реальные байты файлов лежат в архиве под этими id.
     assert loaded.assets[contacts_ref.asset_id] == b"\x89PNG-contacts"
     assert loaded.assets[env_ref.asset_id] == b"JPG-env"
+
+
+def test_save_packs_multi_location_asset_bytes(qtbot: QtBot, tmp_path: Path) -> None:
+    """Сквозная цепочка мульти-ассетов: пациент + фото среды + изображение точки поиска."""
+    patient_img = tmp_path / "patient.png"
+    patient_img.write_bytes(b"PATIENT-bytes")
+    env_photo = tmp_path / "photo.jpg"
+    env_photo.write_bytes(b"PHOTO-bytes")
+    reveal_img = tmp_path / "reveal.png"
+    reveal_img.write_bytes(b"REVEAL-bytes")
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    editor = window.editor
+    editor.case_id_edit.setText("case-multi")
+
+    # Пациент с изображением карточки.
+    editor.add_patient_button.click()
+    patient = editor.patient_editors[0]
+    patient.id_edit.setText("p1")
+    patient.assets_picker.add_file(str(patient_img))
+
+    # Фото объекта внешней среды.
+    editor.environment_editor.photos_picker.add_file(str(env_photo))
+
+    # Изображение вскрытия точки поиска клинического этапа.
+    search = editor.clinical_editor.search_editor
+    search.add_entry_button.click()
+    entry = search.entry_editors[0]
+    entry.triggers.canonical_edit.setText("температура")
+    entry.reveal_assets_picker.add_file(str(reveal_img))
+
+    # Запоминаем id ДО сохранения — пикеры фиксируют их при выборе файла.
+    patient_ref = patient.assets_picker.value()[0]
+    photo_ref = editor.environment_editor.photos_picker.value()[0]
+    reveal_ref = entry.reveal_assets_picker.value()[0]
+
+    dst = tmp_path / "case.educase"
+    assert window.save_case_to_path(dst) is True
+
+    loaded = load_case(dst)
+    # Поля Case ссылаются на ассеты по стабильным id…
+    assert loaded.case.patients.patients[0].assets == (patient_ref.asset_id,)
+    assert loaded.case.environment.photos == (photo_ref.asset_id,)
+    assert loaded.case.clinical.search is not None
+    assert loaded.case.clinical.search.entries[0].reveal_assets == (reveal_ref.asset_id,)
+    # …а реальные байты файлов лежат в архиве под этими id.
+    assert loaded.assets[patient_ref.asset_id] == b"PATIENT-bytes"
+    assert loaded.assets[photo_ref.asset_id] == b"PHOTO-bytes"
+    assert loaded.assets[reveal_ref.asset_id] == b"REVEAL-bytes"
 
 
 def test_save_invalid_template_number_warns_and_skips(

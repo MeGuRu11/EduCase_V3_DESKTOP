@@ -1,6 +1,8 @@
 """Тесты CaseEditor: сборка ``CaseDraft`` из меты и редакторов пациентов."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtWidgets import QTableWidgetItem, QTabWidget
 from pytestqt.qtbot import QtBot
 
@@ -64,7 +66,7 @@ def test_add_and_remove_patient(qtbot: QtBot) -> None:
     assert len(editor.patient_editors) == 0
 
 
-def test_filled_editor_to_draft(qtbot: QtBot) -> None:
+def test_filled_editor_to_draft(qtbot: QtBot, tmp_path: Path) -> None:
     """Заполненные поля меты и пациента → корректный ``CaseDraft``."""
     editor = CaseEditor()
     qtbot.addWidget(editor)
@@ -82,7 +84,12 @@ def test_filled_editor_to_draft(qtbot: QtBot) -> None:
     patient.add_row_button.click()
     patient.fields_table.setItem(0, 0, QTableWidgetItem("Возраст"))
     patient.fields_table.setItem(0, 1, QTableWidgetItem("25 лет"))
-    patient.assets_edit.setText("img_01, img_02 ,")  # пустые куски отбрасываются
+    first_img = tmp_path / "img_01.png"
+    first_img.write_bytes(b"A")
+    second_img = tmp_path / "img_02.png"
+    second_img.write_bytes(b"B")
+    patient.assets_picker.add_file(str(first_img))
+    patient.assets_picker.add_file(str(second_img))
 
     draft = editor.to_draft()
     assert draft.case_id == "case-7"
@@ -93,7 +100,9 @@ def test_filled_editor_to_draft(qtbot: QtBot) -> None:
     assert len(draft.patients) == 1
     assert draft.patients[0].id == "p1"
     assert draft.patients[0].fields == (("Возраст", "25 лет"),)
-    assert draft.patients[0].assets == ("img_01", "img_02")
+    assert len(draft.patients[0].assets) == 2
+    assert draft.patients[0].assets[0].display_name == "img_01.png"
+    assert draft.patients[0].assets[1].display_name == "img_02.png"
 
 
 def test_unit_personnel_parsing(qtbot: QtBot) -> None:

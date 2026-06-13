@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.asset_picker import AssetListPicker
 from educase_core.application.case_builder import PatientDraft
 
 
@@ -26,7 +27,7 @@ class PatientEditor(QWidget):
 
         self.id_edit = QLineEdit(self)
         self.title_edit = QLineEdit(self)
-        self.assets_edit = QLineEdit(self)
+        self.assets_picker = AssetListPicker(self)
 
         self.fields_table = QTableWidget(0, 2, self)
         self.fields_table.setHorizontalHeaderLabels(["Поле", "Значение"])
@@ -39,7 +40,7 @@ class PatientEditor(QWidget):
         form = QFormLayout()
         form.addRow("Идентификатор", self.id_edit)
         form.addRow("Заголовок", self.title_edit)
-        form.addRow("Ассеты (id через запятую)", self.assets_edit)
+        form.addRow("Изображения карточки", self.assets_picker)
 
         row_buttons = QHBoxLayout()
         row_buttons.addWidget(self.add_row_button)
@@ -70,15 +71,11 @@ class PatientEditor(QWidget):
             rows.append((key, value))
         return tuple(rows)
 
-    def _collect_assets(self) -> tuple[str, ...]:
-        parts = (chunk.strip() for chunk in self.assets_edit.text().split(","))
-        return tuple(part for part in parts if part)
-
     def to_draft(self) -> PatientDraft:
         """Собрать ``PatientDraft`` из текущих значений виджетов."""
         return PatientDraft(
             id=self.id_edit.text(),
             title=self.title_edit.text(),
             fields=self._collect_fields(),
-            assets=self._collect_assets(),
+            assets=self.assets_picker.value(),
         )

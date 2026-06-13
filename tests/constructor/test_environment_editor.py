@@ -34,7 +34,12 @@ def test_filled_editor_to_draft(qtbot: QtBot, tmp_path: Path) -> None:
     source.write_bytes(b"PNG")
     editor.intro_edit.setText("Обследуйте пищеблок")
     editor.scheme_picker.set_file(str(source))
-    editor.photos_edit.setText("img_01, img_02 ,")  # пустые куски отбрасываются
+    photo_one = tmp_path / "img_01.png"
+    photo_one.write_bytes(b"1")
+    photo_two = tmp_path / "img_02.png"
+    photo_two.write_bytes(b"2")
+    editor.photos_picker.add_file(str(photo_one))
+    editor.photos_picker.add_file(str(photo_two))
 
     editor.documents_editor.add_task_button.click()
     task = editor.documents_editor.task_editors[0]
@@ -55,7 +60,9 @@ def test_filled_editor_to_draft(qtbot: QtBot, tmp_path: Path) -> None:
     assert draft.scheme is not None
     assert draft.scheme.source_path == str(source)
     assert draft.scheme.display_name == "env.png"
-    assert draft.photos == ("img_01", "img_02")
+    assert len(draft.photos) == 2
+    assert draft.photos[0].display_name == "img_01.png"
+    assert draft.photos[1].display_name == "img_02.png"
     assert len(draft.documents) == 1
     assert draft.documents[0].prompt == "Выберите акт"
     assert draft.documents[0].options[0].title == "Акт обследования"

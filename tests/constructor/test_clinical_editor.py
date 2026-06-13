@@ -1,6 +1,8 @@
 """Тесты ClinicalEditor: сборка ``ClinicalDraft`` из поиска и развилки."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from pytestqt.qtbot import QtBot
 
 from educase_constructor.ui.clinical_editor import ClinicalEditor
@@ -41,7 +43,7 @@ def test_add_and_remove_branch_option(qtbot: QtBot) -> None:
     assert len(branch.option_editors) == 0
 
 
-def test_filled_editor_to_draft(qtbot: QtBot) -> None:
+def test_filled_editor_to_draft(qtbot: QtBot, tmp_path: Path) -> None:
     """Заполненные точка поиска и опции развилки → корректный ``ClinicalDraft``."""
     editor = ClinicalEditor()
     qtbot.addWidget(editor)
@@ -54,7 +56,9 @@ def test_filled_editor_to_draft(qtbot: QtBot) -> None:
     entry.triggers.canonical_edit.setText("температура")
     entry.triggers.synonyms_edit.setText("лихорадка, жар ,")  # пустые куски отбрасываются
     entry.reveal_text_edit.setText("38,5 °C")
-    entry.reveal_assets_edit.setText("img_temp")
+    reveal_src = tmp_path / "temp.png"
+    reveal_src.write_bytes(b"PNG")
+    entry.reveal_assets_picker.add_file(str(reveal_src))
 
     editor.branch_editor.prompt_edit.setText("Предварительный диагноз?")
     editor.branch_editor.add_option_button.click()
@@ -73,7 +77,9 @@ def test_filled_editor_to_draft(qtbot: QtBot) -> None:
     assert entry_draft.triggers.canonical == "температура"
     assert entry_draft.triggers.synonyms == ("лихорадка", "жар")
     assert entry_draft.reveal_text == "38,5 °C"
-    assert entry_draft.reveal_assets == ("img_temp",)
+    assert len(entry_draft.reveal_assets) == 1
+    assert entry_draft.reveal_assets[0].source_path == str(reveal_src)
+    assert entry_draft.reveal_assets[0].display_name == "temp.png"
 
     assert draft.branch.prompt == "Предварительный диагноз?"
     assert len(draft.branch.options) == 2
