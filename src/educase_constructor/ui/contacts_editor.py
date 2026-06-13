@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.asset_picker import AssetPicker
 from educase_constructor.ui.inspection_editor import InspectionEditor
 from educase_core.application.case_builder import ContactsDraft
 
@@ -25,12 +26,12 @@ class ContactsEditor(QWidget):
         super().__init__(parent)
 
         self.intro_edit = QLineEdit(self)
-        self.scheme_edit = QLineEdit(self)
+        self.scheme_picker = AssetPicker(self)
         self.inspection_editor = InspectionEditor(self)
 
         form = QFormLayout()
         form.addRow("Вступление", self.intro_edit)
-        form.addRow("Схема (id ассета)", self.scheme_edit)
+        form.addRow("Схема (изображение)", self.scheme_picker)
 
         inspection_box = QGroupBox("Осмотр")
         inspection_box_layout = QVBoxLayout(inspection_box)
@@ -44,6 +45,6 @@ class ContactsEditor(QWidget):
         """Собрать ``ContactsDraft`` из вступления, схемы и осмотра."""
         return ContactsDraft(
             intro=self.intro_edit.text(),
-            scheme=self.scheme_edit.text(),
+            scheme=self.scheme_picker.value(),
             inspection=self.inspection_editor.to_draft(),
         )

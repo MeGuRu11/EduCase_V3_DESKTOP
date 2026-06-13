@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from educase_core.application.case_builder import (
+    AssetRef,
     BranchDraft,
     BranchOptionDraft,
     CaseDraft,
@@ -378,7 +379,7 @@ def test_build_case_contacts_scheme_and_inspection() -> None:
     """``contacts`` → схема и ожидаемые группы осмотра как заданы."""
     contacts = ContactsDraft(
         intro="Обследуйте контактных",
-        scheme="scheme_contacts",
+        scheme=AssetRef("scheme_contacts", "/tmp/scheme.png", "scheme.png"),
         inspection=InspectionDraft(
             groups=(
                 SynonymSetDraft(canonical="сыпь", synonyms=("экзантема",)),
@@ -397,9 +398,9 @@ def test_build_case_contacts_scheme_and_inspection() -> None:
 
 
 def test_build_case_contacts_blank_scheme_and_empty_inspection_are_none() -> None:
-    """Пустая схема → ``None``; осмотр без валидных групп → ``inspection`` равен ``None``."""
+    """Не выбранная схема → ``None``; осмотр без валидных групп → ``inspection`` равен ``None``."""
     contacts = ContactsDraft(
-        scheme="   ",
+        scheme=None,
         inspection=InspectionDraft(groups=(SynonymSetDraft(canonical="  "),)),
     )
     case = build_case(CaseDraft(case_id="case-cn", contacts=contacts))
@@ -411,7 +412,7 @@ def test_build_case_environment_photos_documents_inspection() -> None:
     """``environment`` → схема, отфильтрованные фото, документы и осмотр как заданы."""
     environment = EnvironmentDraft(
         intro="Обследуйте пищеблок",
-        scheme="scheme_env",
+        scheme=AssetRef("scheme_env", "/tmp/env.png", "env.png"),
         photos=("img_01", "  img_02  ", "   "),  # пустые/пробельные отбрасываются
         documents=(
             DocumentTaskDraft(
@@ -437,9 +438,9 @@ def test_build_case_environment_photos_documents_inspection() -> None:
 
 
 def test_build_case_environment_blank_scheme_and_empty_inspection_are_none() -> None:
-    """Пустая схема → ``None``; осмотр без валидных групп → ``inspection`` равен ``None``."""
+    """Не выбранная схема → ``None``; осмотр без валидных групп → ``inspection`` равен ``None``."""
     case = build_case(
-        CaseDraft(case_id="case-eb", environment=EnvironmentDraft(scheme=""))
+        CaseDraft(case_id="case-eb", environment=EnvironmentDraft(scheme=None))
     )
     assert case.environment.scheme is None
     assert case.environment.inspection is None
@@ -448,11 +449,11 @@ def test_build_case_environment_blank_scheme_and_empty_inspection_are_none() -> 
 def test_build_case_contacts_environment_round_trip_to_dict() -> None:
     """round-trip: build_case(...).to_dict() → Case.from_dict(...) сохраняет этапы 3 и 4."""
     contacts = ContactsDraft(
-        scheme="scheme_contacts",
+        scheme=AssetRef("scheme_contacts", "/tmp/scheme.png", "scheme.png"),
         inspection=InspectionDraft(groups=(SynonymSetDraft(canonical="сыпь"),)),
     )
     environment = EnvironmentDraft(
-        scheme="scheme_env",
+        scheme=AssetRef("scheme_env", "/tmp/env.png", "env.png"),
         photos=("img_01",),
         inspection=InspectionDraft(groups=(SynonymSetDraft(canonical="грязь"),)),
     )

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.asset_picker import AssetPicker
 from educase_constructor.ui.document_editor import DocumentListEditor
 from educase_constructor.ui.inspection_editor import InspectionEditor
 from educase_core.application.case_builder import EnvironmentDraft
@@ -27,14 +28,14 @@ class EnvironmentEditor(QWidget):
         super().__init__(parent)
 
         self.intro_edit = QLineEdit(self)
-        self.scheme_edit = QLineEdit(self)
+        self.scheme_picker = AssetPicker(self)
         self.photos_edit = QLineEdit(self)
         self.documents_editor = DocumentListEditor(self)
         self.inspection_editor = InspectionEditor(self)
 
         form = QFormLayout()
         form.addRow("Вступление", self.intro_edit)
-        form.addRow("Схема (id ассета)", self.scheme_edit)
+        form.addRow("Схема (изображение)", self.scheme_picker)
         form.addRow("Фото (id через запятую)", self.photos_edit)
 
         documents_box = QGroupBox("Документы")
@@ -58,7 +59,7 @@ class EnvironmentEditor(QWidget):
         """Собрать ``EnvironmentDraft`` из вступления, схемы, фото, документов и осмотра."""
         return EnvironmentDraft(
             intro=self.intro_edit.text(),
-            scheme=self.scheme_edit.text(),
+            scheme=self.scheme_picker.value(),
             photos=self._collect_photos(),
             documents=self.documents_editor.to_draft(),
             inspection=self.inspection_editor.to_draft(),

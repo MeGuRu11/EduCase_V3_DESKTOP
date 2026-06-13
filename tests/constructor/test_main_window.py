@@ -80,14 +80,18 @@ def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
     clinical.branch_editor.option_editors[0].label_edit.setText("ОКИ")
 
     # 3 — Контактные лица.
+    contacts_scheme = tmp_path / "scheme_contacts.png"
+    contacts_scheme.write_bytes(b"CONTACTS")
     contacts = editor.contacts_editor
-    contacts.scheme_edit.setText("scheme_contacts")
+    contacts.scheme_picker.set_file(str(contacts_scheme))
     contacts.inspection_editor.add_group_button.click()
     contacts.inspection_editor.group_editors[0].canonical_edit.setText("сыпь")
 
     # 4 — Объекты внешней среды.
+    env_scheme = tmp_path / "scheme_env.png"
+    env_scheme.write_bytes(b"ENV")
     environment = editor.environment_editor
-    environment.scheme_edit.setText("scheme_env")
+    environment.scheme_picker.set_file(str(env_scheme))
     environment.photos_edit.setText("img_01")
     environment.inspection_editor.add_group_button.click()
     environment.inspection_editor.group_editors[0].canonical_edit.setText("грязь")
@@ -124,6 +128,38 @@ def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
     assert loaded.case.ses == expected.ses
     assert loaded.case.final == expected.final
     assert loaded.case == expected
+
+
+def test_save_packs_scheme_asset_bytes(qtbot: QtBot, tmp_path: Path) -> None:
+    """Сквозная цепочка ассета: выбор файла → стабильный id в Case → реальные байты в .educase."""
+    contacts_scheme = tmp_path / "scheme_contacts.png"
+    contacts_scheme.write_bytes(b"\x89PNG-contacts")
+    env_scheme = tmp_path / "scheme_env.jpg"
+    env_scheme.write_bytes(b"JPG-env")
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    editor = window.editor
+
+    editor.case_id_edit.setText("case-asset")
+    editor.contacts_editor.scheme_picker.set_file(str(contacts_scheme))
+    editor.environment_editor.scheme_picker.set_file(str(env_scheme))
+
+    # Запоминаем сгенерированные id ДО сохранения — пикер фиксирует их при выборе файла.
+    contacts_ref = editor.contacts_editor.scheme_picker.value()
+    env_ref = editor.environment_editor.scheme_picker.value()
+    assert contacts_ref is not None and env_ref is not None
+
+    dst = tmp_path / "case.educase"
+    assert window.save_case_to_path(dst) is True
+
+    loaded = load_case(dst)
+    # Case ссылается на схему по стабильному asset_id…
+    assert loaded.case.contacts.scheme == contacts_ref.asset_id
+    assert loaded.case.environment.scheme == env_ref.asset_id
+    # …а реальные байты файлов лежат в архиве под этими id.
+    assert loaded.assets[contacts_ref.asset_id] == b"\x89PNG-contacts"
+    assert loaded.assets[env_ref.asset_id] == b"JPG-env"
 
 
 def test_save_invalid_template_number_warns_and_skips(

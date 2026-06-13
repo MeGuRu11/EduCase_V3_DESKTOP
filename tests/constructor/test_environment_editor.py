@@ -1,6 +1,8 @@
 """Тесты EnvironmentEditor: сборка ``EnvironmentDraft`` из схемы, фото, документов и осмотра."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from pytestqt.qtbot import QtBot
 
 from educase_constructor.ui.environment_editor import EnvironmentEditor
@@ -23,13 +25,15 @@ def test_add_and_remove_inspection_group(qtbot: QtBot) -> None:
     assert len(inspection.group_editors) == 0
 
 
-def test_filled_editor_to_draft(qtbot: QtBot) -> None:
+def test_filled_editor_to_draft(qtbot: QtBot, tmp_path: Path) -> None:
     """Заполненные схема, фото, документ и осмотр → корректный ``EnvironmentDraft``."""
     editor = EnvironmentEditor()
     qtbot.addWidget(editor)
 
+    source = tmp_path / "env.png"
+    source.write_bytes(b"PNG")
     editor.intro_edit.setText("Обследуйте пищеблок")
-    editor.scheme_edit.setText("scheme_env")
+    editor.scheme_picker.set_file(str(source))
     editor.photos_edit.setText("img_01, img_02 ,")  # пустые куски отбрасываются
 
     editor.documents_editor.add_task_button.click()
@@ -48,7 +52,9 @@ def test_filled_editor_to_draft(qtbot: QtBot) -> None:
     draft = editor.to_draft()
 
     assert draft.intro == "Обследуйте пищеблок"
-    assert draft.scheme == "scheme_env"
+    assert draft.scheme is not None
+    assert draft.scheme.source_path == str(source)
+    assert draft.scheme.display_name == "env.png"
     assert draft.photos == ("img_01", "img_02")
     assert len(draft.documents) == 1
     assert draft.documents[0].prompt == "Выберите акт"
@@ -60,13 +66,13 @@ def test_filled_editor_to_draft(qtbot: QtBot) -> None:
 
 
 def test_empty_editor_to_draft(qtbot: QtBot) -> None:
-    """Пустой редактор → пустые схема, фото, документы и осмотр."""
+    """Пустой редактор → схема не выбрана (``None``), пустые фото, документы и осмотр."""
     editor = EnvironmentEditor()
     qtbot.addWidget(editor)
 
     draft = editor.to_draft()
     assert draft.intro == ""
-    assert draft.scheme == ""
+    assert draft.scheme is None
     assert draft.photos == ()
     assert draft.documents == ()
     assert draft.inspection.groups == ()

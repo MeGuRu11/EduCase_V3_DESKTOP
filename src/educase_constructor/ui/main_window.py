@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox
 
 from educase_constructor.ui.case_editor import CaseEditor
 from educase_constructor.ui.report_dialog import ReportDialog
+from educase_core.application.assets import read_asset_sources
 from educase_core.application.case_builder import build_case
 from educase_core.application.cases import save_case
 from educase_core.application.grading import ArchiveError, report_for_result
@@ -50,17 +51,19 @@ class MainWindow(QMainWindow):
     def save_case_to_path(self, path: Path) -> bool:
         """Собрать кейс из редактора и записать в .educase.
 
-        Тестируемый шов: вызывается без диалога выбора файла. При пустом идентификаторе
-        кейса (``build_case`` бросает ``ValueError``) — предупреждение и ``False``, файл не
-        пишется. Запись синхронная: архив маленький и локальный — QThread не нужен.
+        Тестируемый шов: вызывается без диалога выбора файла. При пустом идентификаторе кейса
+        (``build_case`` → ``ValueError``) или недоступном файле-ассете (``read_asset_sources``
+        → ``OSError``) — предупреждение и ``False``, файл не пишется. Запись синхронная: архив
+        маленький и локальный — QThread не нужен.
         """
         draft = self.editor.to_draft()
         try:
             case = build_case(draft)
-        except ValueError as exc:
+            assets = read_asset_sources(draft)
+        except (ValueError, OSError) as exc:
             QMessageBox.warning(self, "Не удалось сохранить", str(exc))
             return False
-        save_case(case, path)
+        save_case(case, path, assets=assets)
         return True
 
     def open_result_dialog(self) -> None:

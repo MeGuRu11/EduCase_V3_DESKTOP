@@ -40,6 +40,20 @@ from educase_core.domain import (
 
 
 @dataclass(frozen=True)
+class AssetRef:
+    """Ссылка на ассет из UI (Вариант B): стабильный id + исходный путь + имя для показа.
+
+    ``asset_id`` — стабильное имя ассета внутри архива (генерирует пикер). ``source_path`` —
+    путь к исходному файлу на диске, по которому читаются байты (только в ``assets.py``, не в
+    чистой сборке). ``display_name`` — исходное имя файла, используется лишь для отображения.
+    """
+
+    asset_id: str
+    source_path: str
+    display_name: str = ""
+
+
+@dataclass(frozen=True)
 class PatientDraft:
     """Сырые значения одной карточки пациента из UI."""
 
@@ -157,7 +171,7 @@ class ContactsDraft:
     """Сырые значения этапа «Обследование контактных лиц»: вступление, схема, осмотр."""
 
     intro: str = ""
-    scheme: str = ""
+    scheme: AssetRef | None = None
     inspection: InspectionDraft = InspectionDraft()
 
 
@@ -166,7 +180,7 @@ class EnvironmentDraft:
     """Сырые значения этапа «Объекты внешней среды»: схема, фото, документы, осмотр."""
 
     intro: str = ""
-    scheme: str = ""
+    scheme: AssetRef | None = None
     photos: tuple[str, ...] = ()
     documents: tuple[DocumentTaskDraft, ...] = ()
     inspection: InspectionDraft = InspectionDraft()
@@ -441,7 +455,7 @@ def build_contacts(draft: ContactsDraft) -> StageContacts:
     """Собрать этап «Обследование контактных лиц» из ``ContactsDraft``."""
     return StageContacts(
         intro=draft.intro,
-        scheme=draft.scheme.strip() or None,
+        scheme=draft.scheme.asset_id if draft.scheme is not None else None,
         inspection=_build_inspection(draft.inspection),
     )
 
@@ -451,7 +465,7 @@ def build_environment(draft: EnvironmentDraft) -> StageEnvironment:
     photos = tuple(p.strip() for p in draft.photos if p.strip())
     return StageEnvironment(
         intro=draft.intro,
-        scheme=draft.scheme.strip() or None,
+        scheme=draft.scheme.asset_id if draft.scheme is not None else None,
         photos=photos,
         documents=_build_documents(draft.documents),
         inspection=_build_inspection(draft.inspection),
@@ -559,6 +573,7 @@ def build_case(draft: CaseDraft) -> Case:
 
 
 __all__ = [
+    "AssetRef",
     "BranchDraft",
     "BranchOptionDraft",
     "CaseDraft",
