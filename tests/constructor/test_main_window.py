@@ -4,12 +4,18 @@ from _pytest.monkeypatch import MonkeyPatch
 from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 from pytestqt.qtbot import QtBot
 
+from educase_constructor.ui.field_editor import FieldEditor
 from educase_constructor.ui.main_window import MainWindow
 from educase_constructor.ui.report_dialog import ReportDialog
 from educase_core.application.case_builder import build_case
 from educase_core.application.cases import load_case, save_case
 from educase_core.application.results import record_attempt
 from educase_core.domain import Attempt, AttemptMeta, Case, CaseMeta
+
+
+def _select_type(field: FieldEditor, value: str) -> None:
+    """Выбрать тип поля по англ. значению (userData), не завязываясь на видимую подпись."""
+    field.type_combo.setCurrentIndex(field.type_combo.findData(value))
 
 
 def test_constructor_window_title(qtbot: QtBot) -> None:
@@ -103,7 +109,7 @@ def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
     ses.intro_edit.setText("Оцените СЭС")
     ses.include_level_checkbox.setChecked(True)
     ses.level_field_editor.label_edit.setText("Уровень СЭС")
-    ses.level_field_editor.type_combo.setCurrentText("choice")
+    _select_type(ses.level_field_editor, "choice")
     ses.level_field_editor.options_edit.setText("благополучное, чрезвычайное")
     ses.level_field_editor.correct_edit.setText("чрезвычайное")
 
@@ -230,7 +236,7 @@ def test_save_invalid_template_number_warns_and_skips(
     editor.ses_editor.include_level_checkbox.setChecked(True)
     level = editor.ses_editor.level_field_editor
     level.label_edit.setText("Доза")
-    level.type_combo.setCurrentText("number")
+    _select_type(level, "number")
     level.number_value_edit.setText("abc")
 
     dst = tmp_path / "case.educase"

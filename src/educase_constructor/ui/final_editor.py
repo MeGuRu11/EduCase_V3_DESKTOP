@@ -43,7 +43,7 @@ class FinalEditor(QWidget):
         documents_box_layout = QVBoxLayout(documents_box)
         documents_box_layout.addWidget(self.documents_editor)
 
-        timelines_box = QGroupBox("Таймлайны")
+        timelines_box = QGroupBox("Сроки наблюдения")
         timelines_box_layout = QVBoxLayout(timelines_box)
         timelines_box_layout.addWidget(self.timelines_editor)
 

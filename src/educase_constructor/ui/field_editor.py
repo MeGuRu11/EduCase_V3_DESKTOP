@@ -20,6 +20,15 @@ from educase_constructor.ui.synonym_editor import SynonymSetEditor
 from educase_core.application.case_builder import FieldDraft
 from educase_core.domain import FieldType
 
+# Русские подписи типов поля для combo. Значение (англ. ``FieldType.value``) хранится в
+# userData и идёт в драфт — домен и маппинг сборки видят прежние англ. значения.
+_TYPE_LABELS: dict[FieldType, str] = {
+    FieldType.TEXT: "Текст",
+    FieldType.NUMBER: "Число",
+    FieldType.DATE: "Дата",
+    FieldType.CHOICE: "Выбор",
+}
+
 
 def _split_csv(text: str) -> tuple[str, ...]:
     parts = (chunk.strip() for chunk in text.split(","))
@@ -35,7 +44,7 @@ class FieldEditor(QWidget):
         self.label_edit = QLineEdit(self)
         self.type_combo = QComboBox(self)
         for field_type in FieldType:
-            self.type_combo.addItem(field_type.value)
+            self.type_combo.addItem(_TYPE_LABELS[field_type], field_type.value)
         self.required_checkbox = QCheckBox("Обязательное поле", self)
         self.required_checkbox.setChecked(True)
 
@@ -80,10 +89,14 @@ class FieldEditor(QWidget):
         layout.addWidget(self.rule_stack)
 
     def to_draft(self) -> FieldDraft:
-        """Собрать ``FieldDraft`` из текущих значений виджетов всех под-форм."""
+        """Собрать ``FieldDraft`` из текущих значений виджетов всех под-форм.
+
+        Тип поля берётся из ``currentData()`` (англ. ``FieldType.value`` в userData), а не из
+        видимой русской подписи — доменный маппинг ``_build_field`` получает прежнее значение.
+        """
         return FieldDraft(
             label=self.label_edit.text(),
-            field_type=self.type_combo.currentText(),
+            field_type=str(self.type_combo.currentData()),
             required=self.required_checkbox.isChecked(),
             keywords=self.keywords_editor.to_draft(),
             number_value=self.number_value_edit.text(),

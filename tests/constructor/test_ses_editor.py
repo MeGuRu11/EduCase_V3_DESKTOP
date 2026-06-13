@@ -3,7 +3,13 @@ from __future__ import annotations
 
 from pytestqt.qtbot import QtBot
 
+from educase_constructor.ui.field_editor import FieldEditor
 from educase_constructor.ui.ses_editor import SesEditor
+
+
+def _select_type(field: FieldEditor, value: str) -> None:
+    """Выбрать тип поля по англ. значению (userData), не завязываясь на видимую подпись."""
+    field.type_combo.setCurrentIndex(field.type_combo.findData(value))
 
 
 def test_level_choice_present_when_checkbox_on(qtbot: QtBot) -> None:
@@ -14,7 +20,7 @@ def test_level_choice_present_when_checkbox_on(qtbot: QtBot) -> None:
     editor.include_level_checkbox.setChecked(True)
     field = editor.level_field_editor
     field.label_edit.setText("Уровень СЭС")
-    field.type_combo.setCurrentText("choice")
+    _select_type(field, "choice")
     field.options_edit.setText(
         "благополучное, неустойчивое, неблагополучное, чрезвычайное"
     )

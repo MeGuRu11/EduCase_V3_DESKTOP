@@ -21,7 +21,7 @@ class SynonymSetEditor(QWidget):
         self.synonyms_edit = QLineEdit(self)
 
         form = QFormLayout(self)
-        form.addRow("Канонический термин", self.canonical_edit)
+        form.addRow("Основной термин", self.canonical_edit)
         form.addRow("Синонимы (через запятую)", self.synonyms_edit)
 
     def _collect_synonyms(self) -> tuple[str, ...]:

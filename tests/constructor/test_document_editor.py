@@ -8,6 +8,13 @@ from educase_constructor.ui.document_editor import (
     DocumentTaskEditor,
 )
 from educase_constructor.ui.field_editor import FieldEditor
+from educase_core.application.case_builder import _build_field
+from educase_core.domain import ChoiceMatch, DateMatch, NumberMatch, TextMatch
+
+
+def _select_type(field: FieldEditor, value: str) -> None:
+    """Выбрать тип поля по англ. значению (userData), не завязываясь на видимую подпись."""
+    field.type_combo.setCurrentIndex(field.type_combo.findData(value))
 
 
 def test_field_editor_text_rule(qtbot: QtBot) -> None:
@@ -16,7 +23,7 @@ def test_field_editor_text_rule(qtbot: QtBot) -> None:
     qtbot.addWidget(editor)
 
     editor.label_edit.setText("Диагноз")
-    editor.type_combo.setCurrentText("text")
+    _select_type(editor, "text")
     editor.keywords_editor.canonical_edit.setText("сальмонеллёз")
     editor.keywords_editor.synonyms_edit.setText("salmonella, сальмонелла ,")
 
@@ -34,7 +41,7 @@ def test_field_editor_number_rule(qtbot: QtBot) -> None:
     qtbot.addWidget(editor)
 
     editor.label_edit.setText("Температура")
-    editor.type_combo.setCurrentText("number")
+    _select_type(editor, "number")
     editor.required_checkbox.setChecked(False)
     editor.number_value_edit.setText("38,5")
     editor.tolerance_edit.setText("0,2")
@@ -54,7 +61,7 @@ def test_field_editor_date_rule(qtbot: QtBot) -> None:
     qtbot.addWidget(editor)
 
     editor.label_edit.setText("Дата заболевания")
-    editor.type_combo.setCurrentText("date")
+    _select_type(editor, "date")
     editor.date_value_edit.setText("2026-06-11")
 
     draft = editor.to_draft()
@@ -68,7 +75,7 @@ def test_field_editor_choice_rule(qtbot: QtBot) -> None:
     qtbot.addWidget(editor)
 
     editor.label_edit.setText("Тяжесть")
-    editor.type_combo.setCurrentText("choice")
+    _select_type(editor, "choice")
     editor.options_edit.setText("лёгкая, средняя, тяжёлая")
     editor.correct_edit.setText("средняя, тяжёлая ,")
 
@@ -83,10 +90,51 @@ def test_field_editor_type_switches_stack(qtbot: QtBot) -> None:
     editor = FieldEditor()
     qtbot.addWidget(editor)
 
-    editor.type_combo.setCurrentText("text")
+    _select_type(editor, "text")
     assert editor.rule_stack.currentWidget() is editor.keywords_editor
-    editor.type_combo.setCurrentText("choice")
+    _select_type(editor, "choice")
     assert editor.rule_stack.currentIndex() == 3
+
+
+def test_field_editor_combo_localized_labels_and_data(qtbot: QtBot) -> None:
+    """Combo показывает русские подписи, но хранит англ. значения ``FieldType`` в userData."""
+    editor = FieldEditor()
+    qtbot.addWidget(editor)
+
+    combo = editor.type_combo
+    pairs = [(combo.itemText(i), combo.itemData(i)) for i in range(combo.count())]
+    assert pairs == [
+        ("Текст", "text"),
+        ("Число", "number"),
+        ("Дата", "date"),
+        ("Выбор", "choice"),
+    ]
+
+
+def test_field_editor_draft_builds_correct_rule_type(qtbot: QtBot) -> None:
+    """Русификация combo не ломает доменный маппинг: каждый тип → правильный класс правила."""
+    editor = FieldEditor()
+    qtbot.addWidget(editor)
+    editor.label_edit.setText("Поле")
+
+    _select_type(editor, "text")
+    editor.keywords_editor.canonical_edit.setText("термин")
+    text_field = _build_field(editor.to_draft(), 1)
+    assert text_field.type.value == "text"
+    assert isinstance(text_field.rule, TextMatch)
+
+    _select_type(editor, "number")
+    editor.number_value_edit.setText("10")
+    assert isinstance(_build_field(editor.to_draft(), 1).rule, NumberMatch)
+
+    _select_type(editor, "date")
+    editor.date_value_edit.setText("2026-06-11")
+    assert isinstance(_build_field(editor.to_draft(), 1).rule, DateMatch)
+
+    _select_type(editor, "choice")
+    editor.options_edit.setText("а, б")
+    editor.correct_edit.setText("а")
+    assert isinstance(_build_field(editor.to_draft(), 1).rule, ChoiceMatch)
 
 
 def test_task_editor_add_remove_options(qtbot: QtBot) -> None:
@@ -140,7 +188,7 @@ def test_list_editor_to_draft_correct_and_decoy(qtbot: QtBot) -> None:
     correct.template_editor.add_field_button.click()
     field = correct.template_editor.field_editors[0]
     field.label_edit.setText("Дата")
-    field.type_combo.setCurrentText("date")
+    _select_type(field, "date")
     field.date_value_edit.setText("2026-06-11")
 
     decoy.title_edit.setText("Обычная справка")
