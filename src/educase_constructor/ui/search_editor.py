@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from educase_constructor.ui.asset_picker import AssetListPicker
+from educase_constructor.ui.list_helpers import make_placeholder, refresh_placeholder
 from educase_constructor.ui.synonym_editor import SynonymSetEditor
 from educase_core.application.case_builder import SearchDraft, SearchEntryDraft
 
@@ -68,22 +69,28 @@ class SearchEditor(QWidget):
         entry_buttons.addWidget(self.add_entry_button)
         entry_buttons.addWidget(self.remove_entry_button)
 
+        self._empty_label = make_placeholder("Пока не добавлено ни одной точки поиска")
+
         self._entries_layout = QVBoxLayout()
 
         entries_box = QGroupBox("Точки поиска")
         entries_box_layout = QVBoxLayout(entries_box)
         entries_box_layout.addLayout(entry_buttons)
+        entries_box_layout.addWidget(self._empty_label)
         entries_box_layout.addLayout(self._entries_layout)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.optional_checkbox)
         layout.addWidget(entries_box)
 
+        self._refresh_empty()
+
     def add_entry(self) -> None:
         """Добавить редактор новой точки поиска в конец списка."""
         editor = SearchEntryEditor(self)
         self.entry_editors.append(editor)
         self._entries_layout.addWidget(editor)
+        self._refresh_empty()
 
     def remove_last_entry(self) -> None:
         """Удалить последний редактор точки поиска (если он есть)."""
@@ -92,6 +99,11 @@ class SearchEditor(QWidget):
         editor = self.entry_editors.pop()
         self._entries_layout.removeWidget(editor)
         editor.deleteLater()
+        self._refresh_empty()
+
+    def _refresh_empty(self) -> None:
+        """Обновить видимость подсказки пустого состояния списка точек поиска."""
+        refresh_placeholder(self._empty_label, is_empty=len(self.entry_editors) == 0)
 
     def to_draft(self) -> SearchDraft:
         """Собрать ``SearchDraft`` из флага и всех редакторов точек поиска."""

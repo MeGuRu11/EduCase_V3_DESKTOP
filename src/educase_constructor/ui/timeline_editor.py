@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.list_helpers import make_placeholder, refresh_placeholder
 from educase_core.application.case_builder import TimelineDraft
 
 
@@ -95,17 +96,23 @@ class TimelineListEditor(QWidget):
         timeline_buttons.addWidget(self.add_timeline_button)
         timeline_buttons.addWidget(self.remove_timeline_button)
 
+        self._empty_label = make_placeholder("Пока не добавлено ни одного срока наблюдения")
+
         self._timelines_layout = QVBoxLayout()
 
         layout = QVBoxLayout(self)
         layout.addLayout(timeline_buttons)
+        layout.addWidget(self._empty_label)
         layout.addLayout(self._timelines_layout)
+
+        self._refresh_empty()
 
     def add_timeline(self) -> None:
         """Добавить редактор нового таймлайна в конец списка."""
         editor = TimelineEditor(self)
         self.timeline_editors.append(editor)
         self._timelines_layout.addWidget(editor)
+        self._refresh_empty()
 
     def remove_last_timeline(self) -> None:
         """Удалить последний редактор таймлайна (если он есть)."""
@@ -114,6 +121,11 @@ class TimelineListEditor(QWidget):
         editor = self.timeline_editors.pop()
         self._timelines_layout.removeWidget(editor)
         editor.deleteLater()
+        self._refresh_empty()
+
+    def _refresh_empty(self) -> None:
+        """Обновить видимость подсказки пустого состояния списка таймлайнов."""
+        refresh_placeholder(self._empty_label, is_empty=len(self.timeline_editors) == 0)
 
     def to_draft(self) -> tuple[TimelineDraft, ...]:
         """Собрать драфты всех таймлайнов."""

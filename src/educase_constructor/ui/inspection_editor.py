@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.list_helpers import make_placeholder, refresh_placeholder
 from educase_constructor.ui.synonym_editor import SynonymSetEditor
 from educase_core.application.case_builder import InspectionDraft
 
@@ -34,17 +35,23 @@ class InspectionEditor(QWidget):
         group_buttons.addWidget(self.add_group_button)
         group_buttons.addWidget(self.remove_group_button)
 
+        self._empty_label = make_placeholder("Пока не добавлено ни одной группы")
+
         self._groups_layout = QVBoxLayout()
 
         layout = QVBoxLayout(self)
         layout.addLayout(group_buttons)
+        layout.addWidget(self._empty_label)
         layout.addLayout(self._groups_layout)
+
+        self._refresh_empty()
 
     def add_group(self) -> None:
         """Добавить редактор новой ожидаемой группы осмотра в конец списка."""
         editor = SynonymSetEditor(self)
         self.group_editors.append(editor)
         self._groups_layout.addWidget(editor)
+        self._refresh_empty()
 
     def remove_last_group(self) -> None:
         """Удалить последний редактор группы (если он есть)."""
@@ -53,6 +60,11 @@ class InspectionEditor(QWidget):
         editor = self.group_editors.pop()
         self._groups_layout.removeWidget(editor)
         editor.deleteLater()
+        self._refresh_empty()
+
+    def _refresh_empty(self) -> None:
+        """Обновить видимость подсказки пустого состояния списка групп осмотра."""
+        refresh_placeholder(self._empty_label, is_empty=len(self.group_editors) == 0)
 
     def to_draft(self) -> InspectionDraft:
         """Собрать ``InspectionDraft`` из всех редакторов групп осмотра."""

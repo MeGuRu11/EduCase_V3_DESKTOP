@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.list_helpers import make_placeholder, refresh_placeholder
 from educase_core.application.case_builder import BranchDraft, BranchOptionDraft
 
 
@@ -59,22 +60,28 @@ class BranchEditor(QWidget):
         option_buttons.addWidget(self.add_option_button)
         option_buttons.addWidget(self.remove_option_button)
 
+        self._empty_label = make_placeholder("Пока не добавлено ни одного варианта")
+
         self._options_layout = QVBoxLayout()
 
         options_box = QGroupBox("Варианты выбора")
         options_box_layout = QVBoxLayout(options_box)
         options_box_layout.addWidget(self.prompt_edit)
         options_box_layout.addLayout(option_buttons)
+        options_box_layout.addWidget(self._empty_label)
         options_box_layout.addLayout(self._options_layout)
 
         layout = QVBoxLayout(self)
         layout.addWidget(options_box)
+
+        self._refresh_empty()
 
     def add_option(self) -> None:
         """Добавить редактор новой опции в конец списка."""
         editor = BranchOptionEditor(self)
         self.option_editors.append(editor)
         self._options_layout.addWidget(editor)
+        self._refresh_empty()
 
     def remove_last_option(self) -> None:
         """Удалить последний редактор опции (если он есть)."""
@@ -83,6 +90,11 @@ class BranchEditor(QWidget):
         editor = self.option_editors.pop()
         self._options_layout.removeWidget(editor)
         editor.deleteLater()
+        self._refresh_empty()
+
+    def _refresh_empty(self) -> None:
+        """Обновить видимость подсказки пустого состояния списка вариантов."""
+        refresh_placeholder(self._empty_label, is_empty=len(self.option_editors) == 0)
 
     def to_draft(self) -> BranchDraft:
         """Собрать ``BranchDraft`` из формулировки и всех редакторов опций."""

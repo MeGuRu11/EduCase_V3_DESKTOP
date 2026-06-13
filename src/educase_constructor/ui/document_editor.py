@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from educase_constructor.ui.list_helpers import make_placeholder, refresh_placeholder
 from educase_constructor.ui.template_editor import TemplateEditor
 from educase_core.application.case_builder import (
     DocumentOptionDraft,
@@ -131,17 +132,23 @@ class DocumentListEditor(QWidget):
         task_buttons.addWidget(self.add_task_button)
         task_buttons.addWidget(self.remove_task_button)
 
+        self._empty_label = make_placeholder("Пока не добавлено ни одного задания")
+
         self._tasks_layout = QVBoxLayout()
 
         layout = QVBoxLayout(self)
         layout.addLayout(task_buttons)
+        layout.addWidget(self._empty_label)
         layout.addLayout(self._tasks_layout)
+
+        self._refresh_empty()
 
     def add_task(self) -> None:
         """Добавить редактор нового задания в конец списка."""
         editor = DocumentTaskEditor(self)
         self.task_editors.append(editor)
         self._tasks_layout.addWidget(editor)
+        self._refresh_empty()
 
     def remove_last_task(self) -> None:
         """Удалить последний редактор задания (если он есть)."""
@@ -150,6 +157,11 @@ class DocumentListEditor(QWidget):
         editor = self.task_editors.pop()
         self._tasks_layout.removeWidget(editor)
         editor.deleteLater()
+        self._refresh_empty()
+
+    def _refresh_empty(self) -> None:
+        """Обновить видимость подсказки пустого состояния списка заданий."""
+        refresh_placeholder(self._empty_label, is_empty=len(self.task_editors) == 0)
 
     def to_draft(self) -> tuple[DocumentTaskDraft, ...]:
         """Собрать драфты всех заданий по документам."""

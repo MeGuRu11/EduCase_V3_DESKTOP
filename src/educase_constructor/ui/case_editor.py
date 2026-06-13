@@ -22,6 +22,7 @@ from educase_constructor.ui.clinical_editor import ClinicalEditor
 from educase_constructor.ui.contacts_editor import ContactsEditor
 from educase_constructor.ui.environment_editor import EnvironmentEditor
 from educase_constructor.ui.final_editor import FinalEditor
+from educase_constructor.ui.list_helpers import make_placeholder, refresh_placeholder
 from educase_constructor.ui.patient_editor import PatientEditor
 from educase_constructor.ui.ses_editor import SesEditor
 from educase_core.application.case_builder import CaseDraft
@@ -57,11 +58,14 @@ class CaseEditor(QWidget):
         patient_buttons.addWidget(self.add_patient_button)
         patient_buttons.addWidget(self.remove_patient_button)
 
+        self._empty_label = make_placeholder("Пока не добавлено ни одного пациента")
+
         self._patients_layout = QVBoxLayout()
 
         patients_box = QGroupBox("Пациенты")
         patients_box_layout = QVBoxLayout(patients_box)
         patients_box_layout.addLayout(patient_buttons)
+        patients_box_layout.addWidget(self._empty_label)
         patients_box_layout.addLayout(self._patients_layout)
 
         self.clinical_editor = ClinicalEditor(self)
@@ -75,7 +79,6 @@ class CaseEditor(QWidget):
         case_tab_layout = QVBoxLayout(case_tab)
         case_tab_layout.addLayout(meta_form)
         case_tab_layout.addWidget(patients_box)
-        case_tab_layout.addStretch(1)
 
         self.tabs = QTabWidget(self)
         self.tabs.addTab(self._scroll_tab(case_tab), "Кейс и пациенты")
@@ -88,15 +91,24 @@ class CaseEditor(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.tabs)
 
-    def _scroll_tab(self, content: QWidget) -> QScrollArea:
-        """Обернуть содержимое вкладки в прокручиваемую область.
+        self._refresh_empty()
 
-        ``setWidgetResizable(True)`` растягивает контент по ширине области и даёт
+    def _scroll_tab(self, content: QWidget) -> QScrollArea:
+        """Обернуть содержимое вкладки в прокручиваемую область, прибитую к верху.
+
+        Контент кладётся в контейнер с растяжкой снизу, поэтому редакторы этапов
+        получают естественную высоту, а секции не расползаются вертикальными дырами.
+        ``setWidgetResizable(True)`` растягивает контейнер по ширине области и даёт
         вертикальную прокрутку высоким редакторам вместо их сжатия.
         """
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.addWidget(content)
+        container_layout.addStretch(1)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setWidget(content)
+        scroll.setWidget(container)
         return scroll
 
     def add_patient(self) -> None:
@@ -104,6 +116,7 @@ class CaseEditor(QWidget):
         editor = PatientEditor(self)
         self.patient_editors.append(editor)
         self._patients_layout.addWidget(editor)
+        self._refresh_empty()
 
     def remove_last_patient(self) -> None:
         """Удалить последний редактор пациента (если он есть)."""
@@ -112,6 +125,11 @@ class CaseEditor(QWidget):
         editor = self.patient_editors.pop()
         self._patients_layout.removeWidget(editor)
         editor.deleteLater()
+        self._refresh_empty()
+
+    def _refresh_empty(self) -> None:
+        """Обновить видимость подсказки пустого состояния списка пациентов."""
+        refresh_placeholder(self._empty_label, is_empty=len(self.patient_editors) == 0)
 
     def _unit_personnel(self) -> int | None:
         text = self.unit_personnel_edit.text().strip()
