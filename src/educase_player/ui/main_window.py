@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         except ArchiveError as exc:
             QMessageBox.warning(self, "Ошибка загрузки", str(exc))
             return False
-        navigator = CaseNavigator(loaded.case, self)
+        navigator = CaseNavigator(loaded.case, loaded.assets, self)
         self.setCentralWidget(navigator)
         self._navigator = navigator
         self._case = loaded.case

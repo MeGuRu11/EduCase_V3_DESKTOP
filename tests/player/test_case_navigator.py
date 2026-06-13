@@ -1,6 +1,12 @@
+from collections.abc import Callable
+from pathlib import Path
+
 from pytestqt.qtbot import QtBot
 
+from educase_core.application.cases import load_case, save_case
 from educase_core.domain.case import Case, CaseMeta
+from educase_core.domain.stages import StageContacts
+from educase_player.ui.asset_image_widget import AssetImageWidget
 from educase_player.ui.case_navigator import CaseNavigator
 
 
@@ -54,3 +60,24 @@ def test_non_blocking_navigation(qtbot: QtBot) -> None:
         assert nav.current_index == i + 1
 
     assert nav.current_index == 5
+
+
+def test_scheme_image_round_trips_to_navigator(
+    qtbot: QtBot, tmp_path: Path, png_bytes: Callable[..., bytes]
+) -> None:
+    """Сквозная цепочка: .educase со схемой-картинкой → CaseNavigator рисует изображение."""
+    case = Case(
+        meta=CaseMeta("c1", "Тест"),
+        contacts=StageContacts(scheme="scheme-1"),
+    )
+    dst = tmp_path / "case.educase"
+    save_case(case, dst, assets={"scheme-1": png_bytes()})
+
+    loaded = load_case(dst)
+    assert loaded.case.contacts.scheme == "scheme-1"
+
+    nav = CaseNavigator(loaded.case, loaded.assets)
+    qtbot.addWidget(nav)
+
+    images: list[AssetImageWidget] = nav.findChildren(AssetImageWidget)
+    assert any(img.has_image() for img in images)

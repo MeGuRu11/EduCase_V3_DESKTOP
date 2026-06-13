@@ -1,6 +1,8 @@
 """Виджет навигации по шести фиксированным этапам кейса."""
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -40,9 +42,15 @@ class CaseNavigator(QWidget):
     вперёд/назад по всем шести этапам независимо от введённых данных.
     """
 
-    def __init__(self, case: Case, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        case: Case,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
 
+        self._assets: Mapping[str, bytes] = assets if assets is not None else {}
         stages = case.ordered()
         self._titles: tuple[str, ...] = tuple(s.title for s in stages)
 
@@ -52,7 +60,7 @@ class CaseNavigator(QWidget):
         layout.addWidget(self._position_label)
 
         self.stack = QStackedWidget()
-        views = tuple(build_stage_view(stage) for stage in stages)
+        views = tuple(build_stage_view(stage, self._assets) for stage in stages)
         self._views: tuple[StageView, ...] = views
         for view in views:
             self.stack.addWidget(view)

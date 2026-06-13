@@ -1,6 +1,8 @@
 """Тесты фабрики build_stage_view — состав виджетов для каждого типа этапа."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtWidgets import QLabel, QWidget
 from pytestqt.qtbot import QtBot
 
@@ -18,6 +20,7 @@ from educase_core.domain.stages import (
     StageSes,
     Timeline,
 )
+from educase_player.ui.asset_image_widget import AssetImageWidget
 from educase_player.ui.branch_widget import BranchWidget
 from educase_player.ui.document_widget import DocumentWidget
 from educase_player.ui.inspection_widget import InspectionWidget
@@ -201,3 +204,79 @@ def test_stage_ses_with_documents_contains_document_widget(qtbot: QtBot) -> None
 
     widgets: list[DocumentWidget] = view.findChildren(DocumentWidget)
     assert len(widgets) == 1
+
+
+# --- Рендер изображений ассетов (схема/фото), заход 3 ---
+
+
+def test_contacts_scheme_present_renders_image(
+    qtbot: QtBot, png_bytes: Callable[..., bytes]
+) -> None:
+    """StageContacts со scheme, присутствующей в assets → AssetImageWidget с изображением."""
+    stage = StageContacts(scheme="scheme-1")
+    view = build_stage_view(stage, {"scheme-1": png_bytes()})
+    qtbot.addWidget(view)
+
+    images: list[AssetImageWidget] = view.findChildren(AssetImageWidget)
+    assert len(images) == 1
+    assert images[0].has_image() is True
+
+
+def test_contacts_scheme_missing_shows_placeholder(qtbot: QtBot) -> None:
+    """StageContacts со scheme без байт в assets → AssetImageWidget-плейсхолдер, без падения."""
+    stage = StageContacts(scheme="ghost")
+    view = build_stage_view(stage, {})  # байт нет
+    qtbot.addWidget(view)
+
+    images: list[AssetImageWidget] = view.findChildren(AssetImageWidget)
+    assert len(images) == 1
+    assert images[0].has_image() is False
+
+
+def test_environment_two_photos_render_images(
+    qtbot: QtBot, png_bytes: Callable[..., bytes]
+) -> None:
+    """StageEnvironment с двумя photos в assets → два AssetImageWidget с изображениями."""
+    stage = StageEnvironment(photos=("ph-1", "ph-2"))
+    view = build_stage_view(stage, {"ph-1": png_bytes(), "ph-2": png_bytes()})
+    qtbot.addWidget(view)
+
+    images: list[AssetImageWidget] = view.findChildren(AssetImageWidget)
+    assert len(images) == 2
+    assert all(img.has_image() for img in images)
+
+
+def test_environment_scheme_present_renders_image(
+    qtbot: QtBot, png_bytes: Callable[..., bytes]
+) -> None:
+    """StageEnvironment со scheme в assets → AssetImageWidget схемы с изображением."""
+    stage = StageEnvironment(scheme="env-scheme")
+    view = build_stage_view(stage, {"env-scheme": png_bytes()})
+    qtbot.addWidget(view)
+
+    images: list[AssetImageWidget] = view.findChildren(AssetImageWidget)
+    assert len(images) == 1
+    assert images[0].has_image() is True
+
+
+def test_environment_scheme_missing_shows_placeholder(qtbot: QtBot) -> None:
+    """StageEnvironment со scheme без байт → AssetImageWidget-плейсхолдер, без падения."""
+    stage = StageEnvironment(scheme="ghost")
+    view = build_stage_view(stage, {})
+    qtbot.addWidget(view)
+
+    images: list[AssetImageWidget] = view.findChildren(AssetImageWidget)
+    assert len(images) == 1
+    assert images[0].has_image() is False
+
+
+def test_environment_photos_dangling_refs_show_placeholders(qtbot: QtBot) -> None:
+    """Инвариант висячей ссылки через цикл фото: нет байт / мусор → плейсхолдеры, без исключения."""
+    stage = StageEnvironment(photos=("missing", "garbage"))
+    # "missing" — нет байт вовсе; "garbage" — байты есть, но не изображение.
+    view = build_stage_view(stage, {"garbage": b"not an image"})
+    qtbot.addWidget(view)
+
+    images: list[AssetImageWidget] = view.findChildren(AssetImageWidget)
+    assert len(images) == 2
+    assert all(img.has_image() is False for img in images)

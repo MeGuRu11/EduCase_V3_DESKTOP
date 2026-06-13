@@ -4,10 +4,12 @@
 раньше, но СОХРАНЯЕТ пары «конфиг-элемент → виджет», чтобы собрать слот ответа ``Attempt``.
 ``to_response`` копит СЫРЫЕ данные курсанта (queries/выбранные id/тексты) без сверки — оценка
 живёт в ``domain.report`` (ADR-008). Read-only элементы (карточки пациентов, таймлайны,
-заглушки схем/фото) в ответ не входят.
+изображения схем/фото) в ответ не входят. Байты ассетов (``assets``) приходят сверху и идут
+ТОЛЬКО в рендер изображений.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import assert_never
 
 from PySide6.QtWidgets import (
@@ -42,6 +44,7 @@ from educase_core.domain.stages import (
     StagePatients,
     StageSes,
 )
+from educase_player.ui.asset_image_widget import AssetImageWidget
 from educase_player.ui.branch_widget import BranchWidget
 from educase_player.ui.document_field_widget import DocumentFieldWidget
 from educase_player.ui.document_widget import DocumentWidget
@@ -59,8 +62,14 @@ class StageView(QWidget):
     Навигация не блокируется ответами (ADR-005/008).
     """
 
-    def __init__(self, stage: Stage, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        stage: Stage,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._assets: Mapping[str, bytes] = assets if assets is not None else {}
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -94,8 +103,13 @@ class StageView(QWidget):
 class PatientsStageView(StageView):
     """Этап 1 «Пациенты»: контекстный поиск + read-only карточки пациентов."""
 
-    def __init__(self, stage: StagePatients, parent: QWidget | None = None) -> None:
-        super().__init__(stage, parent)
+    def __init__(
+        self,
+        stage: StagePatients,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(stage, assets, parent)
         self._search: SearchWidget | None = None
 
         has_content = False
@@ -115,8 +129,13 @@ class PatientsStageView(StageView):
 class ClinicalStageView(StageView):
     """Этап 2 «Клинико-эпидемиологический диагноз»: поиск, ветвление, документы."""
 
-    def __init__(self, stage: StageClinical, parent: QWidget | None = None) -> None:
-        super().__init__(stage, parent)
+    def __init__(
+        self,
+        stage: StageClinical,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(stage, assets, parent)
         self._search: SearchWidget | None = None
         self._branch: tuple[BranchPoint, BranchWidget] | None = None
         self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
@@ -147,17 +166,22 @@ class ClinicalStageView(StageView):
 
 
 class ContactsStageView(StageView):
-    """Этап 3 «Обследование контактных лиц»: заглушка схемы + свободный осмотр."""
+    """Этап 3 «Обследование контактных лиц»: изображение схемы + свободный осмотр."""
 
-    def __init__(self, stage: StageContacts, parent: QWidget | None = None) -> None:
-        super().__init__(stage, parent)
+    def __init__(
+        self,
+        stage: StageContacts,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(stage, assets, parent)
         self._inspection: InspectionWidget | None = None
 
         has_content = False
         if stage.scheme is not None:
-            stub = QLabel(f"Схема: {stage.scheme}")  # TODO ADR-012
-            stub.setEnabled(False)
-            self._layout.addWidget(stub)
+            self._layout.addWidget(
+                AssetImageWidget(stage.scheme, self._assets, caption="Схема")
+            )
             has_content = True
         if stage.inspection is not None:
             self._inspection = InspectionWidget(stage.inspection)
@@ -170,24 +194,28 @@ class ContactsStageView(StageView):
 
 
 class EnvironmentStageView(StageView):
-    """Этап 4 «Объекты внешней среды»: заглушки схемы/фото, документы, осмотр."""
+    """Этап 4 «Объекты внешней среды»: изображения схемы/фото, документы, осмотр."""
 
-    def __init__(self, stage: StageEnvironment, parent: QWidget | None = None) -> None:
-        super().__init__(stage, parent)
+    def __init__(
+        self,
+        stage: StageEnvironment,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(stage, assets, parent)
         self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
         self._inspection: InspectionWidget | None = None
 
         has_content = False
         if stage.scheme is not None:
-            stub = QLabel(f"Схема: {stage.scheme}")  # TODO ADR-012
-            stub.setEnabled(False)
-            self._layout.addWidget(stub)
+            self._layout.addWidget(
+                AssetImageWidget(stage.scheme, self._assets, caption="Схема")
+            )
             has_content = True
-        if stage.photos:
-            photo_ids = ", ".join(stage.photos)
-            photos_stub = QLabel(f"Фото: {photo_ids}")  # TODO ADR-012
-            photos_stub.setEnabled(False)
-            self._layout.addWidget(photos_stub)
+        for photo_id in stage.photos:
+            self._layout.addWidget(
+                AssetImageWidget(photo_id, self._assets, caption="Фото")
+            )
             has_content = True
         for task in stage.documents:
             doc_widget = DocumentWidget(task)
@@ -210,8 +238,13 @@ class EnvironmentStageView(StageView):
 class SesStageView(StageView):
     """Этап 5 «Оценка СЭС»: поиск, выбор уровня СЭС, документы."""
 
-    def __init__(self, stage: StageSes, parent: QWidget | None = None) -> None:
-        super().__init__(stage, parent)
+    def __init__(
+        self,
+        stage: StageSes,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(stage, assets, parent)
         self._search: SearchWidget | None = None
         self._level: tuple[DocumentField, DocumentFieldWidget] | None = None
         self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
@@ -244,8 +277,13 @@ class SesStageView(StageView):
 class FinalStageView(StageView):
     """Этап 6 «Окончательный диагноз»: поиск, документы, read-only таймлайны."""
 
-    def __init__(self, stage: StageFinal, parent: QWidget | None = None) -> None:
-        super().__init__(stage, parent)
+    def __init__(
+        self,
+        stage: StageFinal,
+        assets: Mapping[str, bytes] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(stage, assets, parent)
         self._search: SearchWidget | None = None
         self._docs: list[tuple[DocumentTask, DocumentWidget]] = []
 
@@ -320,18 +358,23 @@ def _choice_resp(
     return ChoiceResponse(answer=widget.answer())
 
 
-def build_stage_view(stage: Stage) -> StageView:
-    """Создать типизированный вид по типу этапа (шесть фиксированных, ADR-004)."""
+def build_stage_view(
+    stage: Stage, assets: Mapping[str, bytes] | None = None
+) -> StageView:
+    """Создать типизированный вид по типу этапа (шесть фиксированных, ADR-004).
+
+    ``assets`` (байты ассетов архива) пробрасываются в вид для рендера изображений схем/фото.
+    """
     if isinstance(stage, StagePatients):
-        return PatientsStageView(stage)
+        return PatientsStageView(stage, assets)
     if isinstance(stage, StageClinical):
-        return ClinicalStageView(stage)
+        return ClinicalStageView(stage, assets)
     if isinstance(stage, StageContacts):
-        return ContactsStageView(stage)
+        return ContactsStageView(stage, assets)
     if isinstance(stage, StageEnvironment):
-        return EnvironmentStageView(stage)
+        return EnvironmentStageView(stage, assets)
     if isinstance(stage, StageSes):
-        return SesStageView(stage)
+        return SesStageView(stage, assets)
     if isinstance(stage, StageFinal):
-        return FinalStageView(stage)
+        return FinalStageView(stage, assets)
     assert_never(stage)
