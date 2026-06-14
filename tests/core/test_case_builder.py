@@ -53,9 +53,8 @@ def test_build_case_with_meta_and_patients() -> None:
         nosology="Сальмонеллёз",
         unit_personnel=150,
         patients=(
-            PatientDraft(id="p1", title="Пациент 1", fields=(("Возраст", "25"),)),
+            PatientDraft(title="Пациент 1", fields=(("Возраст", "25"),)),
             PatientDraft(
-                id="p2",
                 title="Пациент 2",
                 assets=(AssetRef("img_01", "/tmp/p2.png", "p2.png"),),
             ),
@@ -70,7 +69,9 @@ def test_build_case_with_meta_and_patients() -> None:
     assert case.meta.unit_personnel == 150
     assert case.meta.created_at  # ISO-дата проставлена
     assert len(case.patients.patients) == 2
-    assert case.patients.patients[0].id == "p1"
+    # id пациентов автогенерируются — непустые и уникальные между карточками.
+    assert case.patients.patients[0].id
+    assert case.patients.patients[0].id != case.patients.patients[1].id
     assert case.patients.patients[0].fields == (("Возраст", "25"),)
     assert case.patients.patients[1].assets == ("img_01",)
     # Остальные этапы — дефолтные пустые.
@@ -79,10 +80,10 @@ def test_build_case_with_meta_and_patients() -> None:
     assert case.patients.search is None
 
 
-def test_build_case_empty_id_raises() -> None:
-    """Пустой (или пробельный) идентификатор кейса → ``ValueError``."""
-    with pytest.raises(ValueError):
-        build_case(CaseDraft(case_id="   "))
+def test_build_case_blank_id_autogenerates() -> None:
+    """Пустой (или пробельный) идентификатор кейса → автогенерация непустого id."""
+    case = build_case(CaseDraft(case_id="   "))
+    assert case.meta.id
 
 
 def test_build_case_unit_personnel_none() -> None:
@@ -721,7 +722,7 @@ def test_build_case_patients_stage_has_no_intro_or_search() -> None:
     case = build_case(
         CaseDraft(
             case_id="case-p",
-            patients=(PatientDraft(id="p1", title="Пациент 1"),),
+            patients=(PatientDraft(title="Пациент 1"),),
         )
     )
     assert case.patients.intro == ""

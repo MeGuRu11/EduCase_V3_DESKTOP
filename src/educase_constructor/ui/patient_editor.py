@@ -22,13 +22,14 @@ from educase_core.application.case_builder import PatientDraft
 
 
 class PatientEditor(QWidget):
-    """Редактор карточки пациента: id, заголовок, таблица «поле/значение», строка ассетов."""
+    """Редактор карточки пациента: заголовок, таблица «поле/значение», строка ассетов.
+
+    Технический id карточки преподавателем не вводится — его генерирует ``build_case``.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.id_edit = QLineEdit(self)
-        self.id_edit.setPlaceholderText("например, patient-1")
         self.title_edit = QLineEdit(self)
         self.title_edit.setPlaceholderText("ФИО или краткое обозначение пациента")
         self.assets_picker = AssetListPicker(self)
@@ -51,7 +52,6 @@ class PatientEditor(QWidget):
         self.remove_row_button.clicked.connect(self.remove_last_field_row)
 
         form = QFormLayout()
-        form.addRow("Идентификатор", self.id_edit)
         form.addRow("Заголовок", self.title_edit)
         form.addRow("Изображения карточки", self.assets_picker)
 
@@ -88,7 +88,6 @@ class PatientEditor(QWidget):
     def to_draft(self) -> PatientDraft:
         """Собрать ``PatientDraft`` из текущих значений виджетов."""
         return PatientDraft(
-            id=self.id_edit.text(),
             title=self.title_edit.text(),
             fields=self._collect_fields(),
             assets=self.assets_picker.value(),

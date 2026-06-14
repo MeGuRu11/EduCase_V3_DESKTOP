@@ -25,12 +25,11 @@ def test_fields_table_has_minimum_height(qtbot: QtBot) -> None:
     assert editor.fields_table.minimumHeight() >= 140
 
 
-def test_input_fields_have_placeholders(qtbot: QtBot) -> None:
-    """Поля идентификатора и заголовка снабжены непустыми подсказками-примерами."""
+def test_title_field_has_placeholder(qtbot: QtBot) -> None:
+    """Поле заголовка снабжено непустой подсказкой-примером."""
     editor = PatientEditor()
     qtbot.addWidget(editor)
 
-    assert editor.id_edit.placeholderText() != ""
     assert editor.title_edit.placeholderText() != ""
 
 

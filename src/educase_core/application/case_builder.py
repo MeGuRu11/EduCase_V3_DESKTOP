@@ -6,6 +6,7 @@ UI собирает значения виджетов в простые ``*Draft
 """
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import date
 
@@ -55,9 +56,12 @@ class AssetRef:
 
 @dataclass(frozen=True)
 class PatientDraft:
-    """Сырые значения одной карточки пациента из UI."""
+    """Сырые значения одной карточки пациента из UI.
 
-    id: str
+    Технический ``id`` карточки не вводится преподавателем (пациенты не оцениваются, ссылок
+    по id нет) — его генерирует ``build_case``.
+    """
+
     title: str
     fields: tuple[tuple[str, str], ...] = ()
     assets: tuple[AssetRef, ...] = ()
@@ -523,12 +527,12 @@ def build_final(draft: FinalDraft) -> StageFinal:
 def build_case(draft: CaseDraft) -> Case:
     """Собрать доменный ``Case`` из ``CaseDraft``.
 
-    Валидируется только обязательный непустой идентификатор кейса. Этот срез собирает мету,
-    этап «Пациенты» и этапы 2–6. Чистая функция без I/O.
+    Идентификатор кейса служебный и преподавателем не вводится: непустой ``case_id`` из драфта
+    используется как есть (стабильность в пределах сессии редактирования обеспечивает UI),
+    пустой — автогенерируется. Этот срез собирает мету, этап «Пациенты» и этапы 2–6. Чистая
+    функция без I/O.
     """
-    case_id = draft.case_id.strip()
-    if not case_id:
-        raise ValueError("нужен идентификатор кейса")
+    case_id = draft.case_id.strip() or uuid.uuid4().hex
 
     meta = CaseMeta(
         id=case_id,
@@ -541,7 +545,7 @@ def build_case(draft: CaseDraft) -> Case:
     patients = StagePatients(
         patients=tuple(
             PatientCard(
-                id=p.id,
+                id=uuid.uuid4().hex,
                 title=p.title,
                 fields=p.fields,
                 assets=tuple(ref.asset_id for ref in p.assets),

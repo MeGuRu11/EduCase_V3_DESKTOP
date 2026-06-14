@@ -98,7 +98,7 @@ def test_reads_assets_from_all_locations(tmp_path: Path) -> None:
     draft = CaseDraft(
         case_id="case-all",
         patients=(
-            PatientDraft(id="p1", title="П1", assets=(AssetRef("pa.png", str(patient_src)),)),
+            PatientDraft(title="П1", assets=(AssetRef("pa.png", str(patient_src)),)),
         ),
         contacts=ContactsDraft(scheme=AssetRef("sc.png", str(scheme_src))),
         environment=EnvironmentDraft(photos=(AssetRef("ph.jpg", str(photo_src)),)),
@@ -148,7 +148,7 @@ def test_duplicate_asset_id_deduplicated(tmp_path: Path) -> None:
 
     draft = CaseDraft(
         case_id="case-dup",
-        patients=(PatientDraft(id="p1", title="П1", assets=(ref,)),),
+        patients=(PatientDraft(title="П1", assets=(ref,)),),
         environment=EnvironmentDraft(photos=(ref,)),
     )
     assets = read_asset_sources(draft)

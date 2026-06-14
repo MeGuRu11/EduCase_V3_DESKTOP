@@ -29,37 +29,20 @@ def test_save_then_load_round_trip(qtbot: QtBot, tmp_path: Path) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
 
-    window.editor.case_id_edit.setText("case-7")
     window.editor.title_edit.setText("Вспышка ОКИ")
     window.editor.add_patient_button.click()
-    window.editor.patient_editors[0].id_edit.setText("p1")
     window.editor.patient_editors[0].title_edit.setText("Пациент 1")
+    expected_id = window.editor._case_id  # автогенерированный служебный id кейса
 
     dst = tmp_path / "case.educase"
     assert window.save_case_to_path(dst) is True
     assert dst.exists()
 
     loaded = load_case(dst)
-    assert loaded.case.meta.id == "case-7"
+    assert loaded.case.meta.id == expected_id
     assert loaded.case.meta.title == "Вспышка ОКИ"
     assert len(loaded.case.patients.patients) == 1
-    assert loaded.case.patients.patients[0].id == "p1"
-
-
-def test_save_empty_id_warns_and_skips(
-    qtbot: QtBot, tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """Пустой id: предупреждение (заглушено), save_case_to_path → False, файла нет."""
-    monkeypatch.setattr(
-        QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.StandardButton.Ok
-    )
-
-    window = MainWindow()
-    qtbot.addWidget(window)
-
-    dst = tmp_path / "case.educase"
-    assert window.save_case_to_path(dst) is False
-    assert not dst.exists()
+    assert loaded.case.patients.patients[0].id  # автогенерированный id пациента
 
 
 def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
@@ -68,12 +51,10 @@ def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
     qtbot.addWidget(window)
     editor = window.editor
 
-    editor.case_id_edit.setText("case-6")
     editor.title_edit.setText("Полный кейс")
 
     # 1 — Пациенты.
     editor.add_patient_button.click()
-    editor.patient_editors[0].id_edit.setText("p1")
     editor.patient_editors[0].title_edit.setText("Пациент 1")
 
     # 2 — Клинический.
@@ -129,13 +110,16 @@ def test_save_then_load_full_six_stages(qtbot: QtBot, tmp_path: Path) -> None:
     assert window.save_case_to_path(dst) is True
     loaded = load_case(dst)
 
-    assert loaded.case.patients == expected.patients
+    # id пациентов автогенерируются заново при каждой сборке кейса, поэтому карточки сверяем
+    # без id (заголовок/поля/ассеты); этапы 2–6 имеют детерминированные id — сверяем целиком.
+    assert [
+        (p.title, p.fields, p.assets) for p in loaded.case.patients.patients
+    ] == [(p.title, p.fields, p.assets) for p in expected.patients.patients]
     assert loaded.case.clinical == expected.clinical
     assert loaded.case.contacts == expected.contacts
     assert loaded.case.environment == expected.environment
     assert loaded.case.ses == expected.ses
     assert loaded.case.final == expected.final
-    assert loaded.case == expected
 
 
 def test_save_packs_scheme_asset_bytes(qtbot: QtBot, tmp_path: Path) -> None:
@@ -149,7 +133,6 @@ def test_save_packs_scheme_asset_bytes(qtbot: QtBot, tmp_path: Path) -> None:
     qtbot.addWidget(window)
     editor = window.editor
 
-    editor.case_id_edit.setText("case-asset")
     editor.contacts_editor.scheme_picker.set_file(str(contacts_scheme))
     editor.environment_editor.scheme_picker.set_file(str(env_scheme))
 
@@ -182,12 +165,10 @@ def test_save_packs_multi_location_asset_bytes(qtbot: QtBot, tmp_path: Path) -> 
     window = MainWindow()
     qtbot.addWidget(window)
     editor = window.editor
-    editor.case_id_edit.setText("case-multi")
 
     # Пациент с изображением карточки.
     editor.add_patient_button.click()
     patient = editor.patient_editors[0]
-    patient.id_edit.setText("p1")
     patient.assets_picker.add_file(str(patient_img))
 
     # Фото объекта внешней среды.
@@ -232,7 +213,6 @@ def test_save_invalid_template_number_warns_and_skips(
     qtbot.addWidget(window)
     editor = window.editor
 
-    editor.case_id_edit.setText("case-bad-num")
     editor.ses_editor.include_level_checkbox.setChecked(True)
     level = editor.ses_editor.level_field_editor
     level.label_edit.setText("Доза")

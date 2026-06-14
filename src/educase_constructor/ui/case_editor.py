@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import uuid
+
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
@@ -34,7 +36,10 @@ class CaseEditor(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.case_id_edit = QLineEdit(self)
+        # Служебный id кейса преподавателем не вводится: генерируется один раз и стабилен в
+        # пределах сессии редактирования (повторное «Сохранить» даёт тот же id).
+        self._case_id = uuid.uuid4().hex
+
         self.title_edit = QLineEdit(self)
         self.author_edit = QLineEdit(self)
         self.nosology_edit = QLineEdit(self)
@@ -43,7 +48,6 @@ class CaseEditor(QWidget):
         self.patient_editors: list[PatientEditor] = []
 
         meta_form = QFormLayout()
-        meta_form.addRow("Идентификатор кейса", self.case_id_edit)
         meta_form.addRow("Название", self.title_edit)
         meta_form.addRow("Автор", self.author_edit)
         meta_form.addRow("Нозология", self.nosology_edit)
@@ -143,7 +147,7 @@ class CaseEditor(QWidget):
     def to_draft(self) -> CaseDraft:
         """Собрать ``CaseDraft`` из меты и всех редакторов пациентов."""
         return CaseDraft(
-            case_id=self.case_id_edit.text(),
+            case_id=self._case_id,
             title=self.title_edit.text(),
             author=self.author_edit.text(),
             nosology=self.nosology_edit.text(),
