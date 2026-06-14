@@ -14,3 +14,7 @@ def test_load_qss_contains_key_selectors() -> None:
     qss = load_qss()
     assert "QGroupBox" in qss
     assert ":disabled" in qss
+    assert "QPushButton" in qss
+    assert "#criticalToggle" in qss
+    assert ":focus" in qss
+    assert "QHeaderView::section" in qss

@@ -37,6 +37,7 @@ class DocumentOptionEditor(QWidget):
 
         self.title_edit = QLineEdit(self)
         self.correct_checkbox = QCheckBox("Верный документ", self)
+        self.correct_checkbox.setObjectName("criticalToggle")
         self.template_editor = TemplateEditor(self)
 
         title_form = QFormLayout()

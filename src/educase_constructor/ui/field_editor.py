@@ -46,6 +46,7 @@ class FieldEditor(QWidget):
         for field_type in FieldType:
             self.type_combo.addItem(_TYPE_LABELS[field_type], field_type.value)
         self.required_checkbox = QCheckBox("Обязательное поле", self)
+        self.required_checkbox.setObjectName("criticalToggle")
         self.required_checkbox.setChecked(True)
 
         # Страницы стека — в порядке элементов type_combo (порядок FieldType).

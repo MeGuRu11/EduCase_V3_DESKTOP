@@ -31,6 +31,7 @@ class TimelineEditor(QWidget):
 
         self.events_table = QTableWidget(0, 2, self)
         self.events_table.setHorizontalHeaderLabels(["Дата", "Событие"])
+        self.events_table.setMinimumHeight(140)
 
         self.add_row_button = QPushButton("+ строка", self)
         self.remove_row_button = QPushButton("− строка", self)

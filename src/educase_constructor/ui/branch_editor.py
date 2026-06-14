@@ -28,6 +28,7 @@ class BranchOptionEditor(QWidget):
 
         self.label_edit = QLineEdit(self)
         self.correct_checkbox = QCheckBox("Верный вариант", self)
+        self.correct_checkbox.setObjectName("criticalToggle")
 
         layout = QHBoxLayout(self)
         layout.addWidget(self.label_edit)

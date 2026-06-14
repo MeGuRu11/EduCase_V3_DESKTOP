@@ -5,6 +5,7 @@ from pytestqt.qtbot import QtBot
 
 from educase_constructor.ui.document_editor import (
     DocumentListEditor,
+    DocumentOptionEditor,
     DocumentTaskEditor,
 )
 from educase_constructor.ui.field_editor import FieldEditor
@@ -135,6 +136,20 @@ def test_field_editor_draft_builds_correct_rule_type(qtbot: QtBot) -> None:
     editor.options_edit.setText("а, б")
     editor.correct_edit.setText("а")
     assert isinstance(_build_field(editor.to_draft(), 1).rule, ChoiceMatch)
+
+
+def test_document_option_correct_checkbox_object_name(qtbot: QtBot) -> None:
+    """correct_checkbox имеет objectName "criticalToggle" для CSS-таргетинга темы."""
+    editor = DocumentOptionEditor()
+    qtbot.addWidget(editor)
+    assert editor.correct_checkbox.objectName() == "criticalToggle"
+
+
+def test_field_editor_required_checkbox_object_name(qtbot: QtBot) -> None:
+    """required_checkbox имеет objectName "criticalToggle" для CSS-таргетинга темы."""
+    editor = FieldEditor()
+    qtbot.addWidget(editor)
+    assert editor.required_checkbox.objectName() == "criticalToggle"
 
 
 def test_task_editor_add_remove_options(qtbot: QtBot) -> None:

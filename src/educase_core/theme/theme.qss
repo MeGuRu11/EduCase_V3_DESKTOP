@@ -1,47 +1,162 @@
-/* EduCase — базовая тема (A2).
- * Только читаемость: шрифт, кегль, отступы, воздух, приглушённый :disabled.
- * БЕЗ брендинга, кастомных фоновых палитр и градиентов. */
+/* EduCase — профессиональная светлая тема (Level 1).
+ * Палитра: холодный светлый фон, белые карточки, teal-акцент, нейтральные рамки.
+ * QSS не поддерживает переменные — hex-значения хардкодятся консистентно.
+ *
+ * Ключевые цвета:
+ *   фон приложения      #EDF0F3   поверхность/карточка  #FFFFFF
+ *   вложенная карточка  #F6F8FA   текст основной        #1F2A33
+ *   рамка нейтральная   #D4DAE0   рамка поля            #C7CED5
+ *   акцент teal         #0F766E   акцент hover          #0B5E57
+ *   акцент-фон          #E6F2F1   отключённый текст     #9AA5AF
+ */
 
-/* Общий шрифт и кегль. Системный sans Windows, без экзотики. */
+/* Базовый шрифт и цвет текста. Системный sans Windows, без экзотики. */
 QWidget {
     font-family: "Segoe UI", "Sans Serif";
     font-size: 14px;
+    color: #1F2A33;
 }
 
-/* Группы секций: внятный заголовок, рамка, внутренний воздух.
+/* Фон главного окна и диалогов — холодный светло-серый, не голый Fusion-серый. */
+QMainWindow,
+QDialog {
+    background: #EDF0F3;
+}
+
+/* QGroupBox = карточка секции: белый фон, нейтральная рамка, скруглённые углы.
  * margin-top оставляет место под вынесенный заголовок. */
 QGroupBox {
-    border: 1px solid palette(mid);
-    border-radius: 4px;
-    margin-top: 12px;
-    padding: 8px;
+    background: #FFFFFF;
+    border: 1px solid #D4DAE0;
+    border-radius: 8px;
+    margin-top: 16px;
+    padding: 12px 12px 12px 12px;
 }
 
+/* Вложенная карточка слегка отличается — снижает эффект «рамка в рамке». */
+QGroupBox QGroupBox {
+    background: #F6F8FA;
+}
+
+/* Заголовки секций — акцентный teal, жирный, бросаются в глаза. */
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    left: 8px;
+    left: 10px;
     padding: 0 4px;
+    color: #0F766E;
     font-weight: bold;
 }
 
-/* Интерактивные элементы: padding, чтобы текст не прилипал к рамке. */
-QPushButton {
-    padding: 5px 12px;
-}
-
+/* Поля ввода: белый фон, нейтральная рамка, живой teal-фокус. */
 QLineEdit,
-QComboBox {
-    padding: 4px 6px;
+QComboBox,
+QPlainTextEdit,
+QTextEdit,
+QDateEdit,
+QSpinBox {
+    background: #FFFFFF;
+    border: 1px solid #C7CED5;
+    border-radius: 6px;
+    padding: 5px 8px;
+    selection-background-color: #0F766E;
+    selection-color: #FFFFFF;
 }
 
-/* Воздух между прижатыми друг к другу секциями. */
+QLineEdit:focus,
+QComboBox:focus,
+QPlainTextEdit:focus,
+QTextEdit:focus,
+QDateEdit:focus,
+QSpinBox:focus {
+    border: 1px solid #0F766E;
+}
+
+/* Дропдаун комбобокса. */
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background: #FFFFFF;
+    border: 1px solid #D4DAE0;
+    selection-background-color: #E6F2F1;
+    selection-color: #1F2A33;
+}
+
+/* Кнопки: нейтральный белый, teal-рамка при наведении. */
+QPushButton {
+    background: #FFFFFF;
+    color: #1F2A33;
+    border: 1px solid #C7CED5;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+
+QPushButton:hover {
+    background: #F0F3F5;
+    border-color: #0F766E;
+}
+
+QPushButton:pressed {
+    background: #E3E8EC;
+}
+
+QPushButton:disabled {
+    color: #9AA5AF;
+    border-color: #E1E6EA;
+}
+
+/* Таблицы: белый фон, тонкая сетка, скруглённая рамка. */
+QTableView,
+QTableWidget {
+    background: #FFFFFF;
+    gridline-color: #E1E6EA;
+    border: 1px solid #D4DAE0;
+    border-radius: 6px;
+}
+
+QHeaderView::section {
+    background: #F0F3F5;
+    color: #1F2A33;
+    padding: 4px 6px;
+    border: none;
+    border-bottom: 1px solid #D4DAE0;
+}
+
+QTableView::item:selected,
+QTableWidget::item:selected {
+    background-color: #E6F2F1;
+    color: #1F2A33;
+}
+
+/* Вкладки: акцентная подчёркивающая линия у активной вкладки. */
+QTabBar::tab {
+    padding: 6px 14px;
+}
+
+QTabBar::tab:selected {
+    color: #0F766E;
+    font-weight: bold;
+    border-bottom: 2px solid #0F766E;
+}
+
 QTabWidget::pane {
+    border: 1px solid #D4DAE0;
+    border-radius: 6px;
     padding: 6px;
 }
 
-/* Единый приглушённый вид отключённых элементов — в том числе
- * плейсхолдеров пустого состояния, сделанных через setEnabled(False). */
+/* Критичные галочки (objectName="criticalToggle") — определяют верный ответ. */
+QCheckBox#criticalToggle {
+    color: #0F766E;
+    font-weight: bold;
+}
+
+/* Единый приглушённый вид отключённых элементов, включая плейсхолдеры пустого состояния.
+ * НЕ дублируем отдельным правилом QLabel { color: ... } — иначе приглушатся
+ * заголовки-инструкции Player, которые должны оставаться читаемыми. */
 *:disabled {
-    color: palette(mid);
+    color: #9AA5AF;
 }
