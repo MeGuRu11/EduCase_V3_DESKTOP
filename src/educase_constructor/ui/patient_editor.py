@@ -8,6 +8,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLineEdit,
     QPushButton,
     QTableWidget,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from educase_constructor.ui.asset_picker import AssetListPicker
+from educase_constructor.ui.list_helpers import make_placeholder
 from educase_core.application.case_builder import PatientDraft
 
 
@@ -26,11 +28,22 @@ class PatientEditor(QWidget):
         super().__init__(parent)
 
         self.id_edit = QLineEdit(self)
+        self.id_edit.setPlaceholderText("например, patient-1")
         self.title_edit = QLineEdit(self)
+        self.title_edit.setPlaceholderText("ФИО или краткое обозначение пациента")
         self.assets_picker = AssetListPicker(self)
 
         self.fields_table = QTableWidget(0, 2, self)
         self.fields_table.setHorizontalHeaderLabels(["Поле", "Значение"])
+        self.fields_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.fields_table.setMinimumHeight(140)
+
+        self.fields_hint = make_placeholder(
+            "Характеристики пациента (строки «Поле/Значение»): "
+            "например, возраст, жалобы, диагноз, температура."
+        )
 
         self.add_row_button = QPushButton("+ строка", self)
         self.remove_row_button = QPushButton("− строка", self)
@@ -48,6 +61,7 @@ class PatientEditor(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
+        layout.addWidget(self.fields_hint)
         layout.addWidget(self.fields_table)
         layout.addLayout(row_buttons)
 
