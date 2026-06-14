@@ -6,7 +6,7 @@ a = Analysis(
     ["../src/educase_player/__main__.py"],
     pathex=["src"],
     binaries=[],
-    datas=[],            # TODO: добавить QSS/ресурсы по мере появления
+    datas=[("../src/educase_core/theme/theme.qss", "educase_core/theme")],
     hiddenimports=[],
     hookspath=[],
     excludes=[],

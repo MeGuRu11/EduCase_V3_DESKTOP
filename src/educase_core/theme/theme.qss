@@ -1,0 +1,47 @@
+/* EduCase — базовая тема (A2).
+ * Только читаемость: шрифт, кегль, отступы, воздух, приглушённый :disabled.
+ * БЕЗ брендинга, кастомных фоновых палитр и градиентов. */
+
+/* Общий шрифт и кегль. Системный sans Windows, без экзотики. */
+QWidget {
+    font-family: "Segoe UI", "Sans Serif";
+    font-size: 14px;
+}
+
+/* Группы секций: внятный заголовок, рамка, внутренний воздух.
+ * margin-top оставляет место под вынесенный заголовок. */
+QGroupBox {
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    margin-top: 12px;
+    padding: 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 8px;
+    padding: 0 4px;
+    font-weight: bold;
+}
+
+/* Интерактивные элементы: padding, чтобы текст не прилипал к рамке. */
+QPushButton {
+    padding: 5px 12px;
+}
+
+QLineEdit,
+QComboBox {
+    padding: 4px 6px;
+}
+
+/* Воздух между прижатыми друг к другу секциями. */
+QTabWidget::pane {
+    padding: 6px;
+}
+
+/* Единый приглушённый вид отключённых элементов — в том числе
+ * плейсхолдеров пустого состояния, сделанных через setEnabled(False). */
+*:disabled {
+    color: palette(mid);
+}

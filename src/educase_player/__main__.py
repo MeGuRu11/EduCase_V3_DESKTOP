@@ -6,12 +6,14 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from educase_core.logging import setup_logging
+from educase_core.theme import load_qss
 from educase_player.ui.main_window import MainWindow
 
 
 def main() -> int:
     setup_logging("player")
     app = QApplication(sys.argv)
+    app.setStyleSheet(load_qss())
     window = MainWindow()
     window.show()
     return app.exec()

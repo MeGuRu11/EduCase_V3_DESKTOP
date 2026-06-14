@@ -7,11 +7,13 @@ from PySide6.QtWidgets import QApplication
 
 from educase_constructor.ui.main_window import MainWindow
 from educase_core.logging import setup_logging
+from educase_core.theme import load_qss
 
 
 def main() -> int:
     setup_logging("constructor")
     app = QApplication(sys.argv)
+    app.setStyleSheet(load_qss())
     window = MainWindow()
     window.show()
     return app.exec()
